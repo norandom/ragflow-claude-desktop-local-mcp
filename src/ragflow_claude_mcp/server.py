@@ -102,8 +102,12 @@ class RAGFlowMCPServer:
         self.active_sessions[dataset_id] = chat_id
         return chat_id
 
-    async def query_ragflow(self, dataset_id: str, query: str, session_name: Optional[str] = None, stream: bool = False) -> Dict[str, Any]:
-        """Query RAGFlow using chat completions endpoint"""
+    async def query_ragflow(self, dataset_id: str, query: str, session_name: Optional[str] = None, stream: bool = False, languages: Optional[List[str]] = None) -> Dict[str, Any]:
+        """Query RAGFlow using chat completions endpoint with cross-language support"""
+        # Default to English and German if no languages specified
+        if languages is None:
+            languages = ["en", "de"]
+        
         # Check if we have an existing session
         if dataset_id not in self.active_sessions:
             # Create a new chat session
@@ -111,10 +115,19 @@ class RAGFlowMCPServer:
         else:
             chat_id = self.active_sessions[dataset_id]
         
+        # Enhance query with cross-language instructions
+        enhanced_query = f"""Please search for information in multiple languages (primarily English and German) and provide a comprehensive answer. 
+
+Languages to consider: {', '.join(languages)}
+
+Original query: {query}
+
+Please provide responses that include information found in any of the specified languages. When relevant content is found in different languages, provide translations or summaries as appropriate. Use context7 for up-to-date documentation and cross-language queries when possible."""
+        
         endpoint = f"/api/v1/chats_openai/{chat_id}/chat/completions"
         data = {
             "model": "ragflow",
-            "messages": [{"role": "user", "content": query}],
+            "messages": [{"role": "user", "content": enhanced_query}],
             "stream": stream,
             "dataset_id": dataset_id
         }
@@ -220,6 +233,11 @@ async def handle_list_tools() -> List[types.Tool]:
                     "session_name": {
                         "type": "string",
                         "description": "Optional session name for the chat (e.g., 'basf-financial-analysis'). If not provided, a default session will be used."
+                    },
+                    "languages": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional list of language codes to search in (e.g., ['en', 'de']). Defaults to ['en', 'de'] for English and German."
                     }
                 },
                 "required": ["dataset_id", "query"]
@@ -304,6 +322,11 @@ async def handle_list_tools() -> List[types.Tool]:
                     "session_name": {
                         "type": "string",
                         "description": "Optional session name for the chat (e.g., 'basf-financial-analysis')"
+                    },
+                    "languages": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional list of language codes to search in (e.g., ['en', 'de']). Defaults to ['en', 'de'] for English and German."
                     }
                 },
                 "required": ["dataset_name", "query"]
@@ -321,7 +344,8 @@ async def handle_call_tool(
             result = await ragflow_client.query_ragflow(
                 dataset_id=arguments["dataset_id"],
                 query=arguments["query"],
-                session_name=arguments.get("session_name")
+                session_name=arguments.get("session_name"),
+                languages=arguments.get("languages")
             )
             return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
             
@@ -362,7 +386,8 @@ async def handle_call_tool(
             result = await ragflow_client.query_ragflow(
                 dataset_id=dataset_id,
                 query=arguments["query"],
-                session_name=arguments.get("session_name")
+                session_name=arguments.get("session_name"),
+                languages=arguments.get("languages")
             )
             
             # Include dataset info in response

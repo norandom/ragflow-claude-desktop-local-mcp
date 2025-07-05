@@ -4,6 +4,8 @@ A Model Context Protocol (MCP) server that provides seamless integration between
 
 ## Features
 
+- **Cross-Language Queries**: Built-in support for multilingual queries with English and German as defaults
+- **Context7 Integration**: Leverages Context7 for up-to-date documentation and cross-language searches
 - **Automatic Session Management**: Sessions are automatically created and reused per dataset
 - **Dataset Name Lookup**: Query knowledge bases using familiar names instead of cryptic IDs
 - **Fuzzy Matching**: Find datasets with partial name matches (case-insensitive)
@@ -63,6 +65,7 @@ Query RAGFlow knowledge bases using dataset names (recommended for most users).
 - `dataset_name` (required): Name of the knowledge base (e.g., "BASF", "Company Reports")
 - `query` (required): Your question or search query
 - `session_name` (optional): Custom session name for organization
+- `languages` (optional): Array of language codes to search in (e.g., ["en", "de", "es"]). Defaults to ["en", "de"]
 
 ### 2. `ragflow_query`
 Query RAGFlow knowledge bases using dataset IDs (for advanced users).
@@ -71,6 +74,7 @@ Query RAGFlow knowledge bases using dataset IDs (for advanced users).
 - `dataset_id` (required): Unique identifier of the dataset
 - `query` (required): Your question or search query
 - `session_name` (optional): Custom session name for organization
+- `languages` (optional): Array of language codes to search in (e.g., ["en", "de", "es"]). Defaults to ["en", "de"]
 
 ### 3. `ragflow_list_datasets`
 List all available knowledge bases in your RAGFlow instance.
@@ -107,6 +111,12 @@ Reset/clear the chat session for a specific dataset when encountering session ow
 
 ```
 Please use the ragflow_query_by_name tool with dataset_name "BASF", session_name "basf-financial-analysis", and query "What is BASF's latest income statement? Please provide the revenue, operating income, net income, and other key financial figures."
+```
+
+### Cross-Language Query
+
+```
+Please use the ragflow_query_by_name tool with dataset_name "BASF", session_name "multilingual-analysis", query "Was sind die Hauptgeschäftsbereiche von BASF?", and languages ["en", "de", "es"].
 ```
 
 ### Query with Custom Session Name
@@ -157,7 +167,20 @@ Please use session_name "basf-financial-analysis" for better organization.
 Please use the ragflow_query_by_name tool with dataset_name "BASF", session_name "basf-financial-analysis", and query "What is BASF's latest income statement? Please provide detailed information about revenue, operating income, net income, gross margin, operating margin, and any other key financial metrics."
 ```
 
+### Multilingual Research Query
+
+```
+Please use the ragflow_query_by_name tool with dataset_name "Company Research", session_name "multilingual-search", query "Find information about renewable energy investments and sustainability initiatives", and languages ["en", "de", "fr", "es"] to search across multiple languages and provide comprehensive results.
+```
+
 ## Technical Details
+
+### Cross-Language Features
+- **Default Languages**: English (`en`) and German (`de`) are set as defaults
+- **Context7 Integration**: Leverages Context7 for up-to-date multilingual documentation
+- **Enhanced Prompts**: Queries automatically include instructions for multilingual search
+- **Language Customization**: Optional `languages` parameter accepts custom language codes
+- **Translation Support**: Provides translations and summaries when content is found in different languages
 
 ### Session Management
 - Each dataset automatically gets a unique session created via RAGFlow's chat API
