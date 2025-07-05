@@ -1,0 +1,20 @@
+[project]
+name = "ragflow-claude-mcp"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Marius Ciepluch", email = "11855163+norandom@users.noreply.github.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "aiohttp>=3.12.13",
+    "mcp>=1.10.1",
+]
+
+[project.scripts]
+ragflow-claude-mcp = "ragflow_claude_mcp.server:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
