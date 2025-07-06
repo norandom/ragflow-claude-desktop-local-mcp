@@ -226,7 +226,3 @@ The server will start and listen for MCP requests via stdio.
 4. **Connection errors**: Verify your `RAGFLOW_BASE_URL` and `RAGFLOW_API_KEY` are correct
 5. **Server won't start**: Check that all dependencies are installed with `uv install`
 6. **Persistent session errors**: Check `ragflow_list_sessions` to see active sessions and reset individual datasets as needed
-
-## License
-
-[Add your license information here]
