@@ -17,7 +17,7 @@ A Model Context Protocol (MCP) server that provides seamless integration between
 
 1. Clone the repository:
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/norandom/ragflow-claude-desktop-local-mcp
    cd ragflow-claude-desktop-local-mcp
    ```
 
