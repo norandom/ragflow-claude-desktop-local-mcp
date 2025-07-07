@@ -102,7 +102,7 @@ class RAGFlowMCPServer:
         self.active_sessions[dataset_id] = chat_id
         return chat_id
 
-    async def query_ragflow(self, dataset_id: str, query: str, session_name: Optional[str] = None, stream: bool = False, languages: Optional[List[str]] = None) -> Dict[str, Any]:
+    async def query_ragflow(self, dataset_id: str, query: str, session_name: Optional[str] = None, stream: bool = False, languages: Optional[List[str]] = None, top_n: int = 10, similarity_threshold: float = 0.2) -> Dict[str, Any]:
         """Query RAGFlow using chat completions endpoint with cross-language support"""
         # Default to English and German if no languages specified
         if languages is None:
@@ -129,7 +129,9 @@ Please provide responses that include information found in any of the specified 
             "model": "ragflow",
             "messages": [{"role": "user", "content": enhanced_query}],
             "stream": stream,
-            "dataset_id": dataset_id
+            "dataset_id": dataset_id,
+            "top_n": top_n,
+            "similarity_threshold": similarity_threshold
         }
         
         try:
@@ -257,6 +259,14 @@ async def handle_list_tools() -> List[types.Tool]:
                         "type": "array",
                         "items": {"type": "string"},
                         "description": "Optional list of language codes to search in (e.g., ['en', 'de']). Defaults to ['en', 'de'] for English and German."
+                    },
+                    "top_n": {
+                        "type": "integer",
+                        "description": "Number of top chunks above similarity threshold to feed to LLM. Defaults to 10."
+                    },
+                    "similarity_threshold": {
+                        "type": "number",
+                        "description": "Minimum similarity score for chunks (0.0 to 1.0). Defaults to 0.2."
                     }
                 },
                 "required": ["dataset_id", "query"]
@@ -346,6 +356,14 @@ async def handle_list_tools() -> List[types.Tool]:
                         "type": "array",
                         "items": {"type": "string"},
                         "description": "Optional list of language codes to search in (e.g., ['en', 'de']). Defaults to ['en', 'de'] for English and German."
+                    },
+                    "top_n": {
+                        "type": "integer",
+                        "description": "Number of top chunks above similarity threshold to feed to LLM. Defaults to 10."
+                    },
+                    "similarity_threshold": {
+                        "type": "number",
+                        "description": "Minimum similarity score for chunks (0.0 to 1.0). Defaults to 0.2."
                     }
                 },
                 "required": ["dataset_name", "query"]
@@ -364,7 +382,9 @@ async def handle_call_tool(
                 dataset_id=arguments["dataset_id"],
                 query=arguments["query"],
                 session_name=arguments.get("session_name"),
-                languages=arguments.get("languages")
+                languages=arguments.get("languages"),
+                top_n=arguments.get("top_n", 10),
+                similarity_threshold=arguments.get("similarity_threshold", 0.2)
             )
             return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
             
@@ -406,7 +426,9 @@ async def handle_call_tool(
                 dataset_id=dataset_id,
                 query=arguments["query"],
                 session_name=arguments.get("session_name"),
-                languages=arguments.get("languages")
+                languages=arguments.get("languages"),
+                top_n=arguments.get("top_n", 10),
+                similarity_threshold=arguments.get("similarity_threshold", 0.2)
             )
             
             # Include dataset info in response

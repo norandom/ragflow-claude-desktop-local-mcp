@@ -4,6 +4,7 @@ A Model Context Protocol (MCP) server that provides seamless integration between
 
 ## Features
 
+- **Enhanced Result Control**: Fine-tuned control over query results with `top_n` (default: 10) and `similarity_threshold` (default: 0.2) parameters
 - **Cross-Language Queries**: Built-in support for multilingual queries with English and German as defaults
 - **Context7 Integration**: Leverages Context7 for up-to-date documentation and cross-language searches
 - **Automatic Session Management**: Sessions are automatically created and reused per dataset
@@ -12,6 +13,7 @@ A Model Context Protocol (MCP) server that provides seamless integration between
 - **Session Persistence**: Conversation context is maintained across queries
 - **Enhanced Error Handling**: Clear error messages and dataset suggestions
 - **Multiple Query Methods**: Support for both ID-based and name-based queries
+- **Improved Query Quality**: Increased default result limit from 1 to 10 chunks for better responses
 
 ## Installation
 
@@ -65,6 +67,8 @@ Query RAGFlow knowledge bases using dataset names (recommended for most users).
 - `query` (required): Your question or search query
 - `session_name` (optional): Custom session name for organization
 - `languages` (optional): Array of language codes to search in (e.g., ["en", "de", "es"]). Defaults to ["en", "de"]
+- `top_n` (optional): Number of top chunks above similarity threshold to feed to LLM. Defaults to 10.
+- `similarity_threshold` (optional): Minimum similarity score for chunks (0.0 to 1.0). Defaults to 0.2.
 
 ### 2. `ragflow_query`
 Query RAGFlow knowledge bases using dataset IDs (for advanced users).
@@ -74,6 +78,8 @@ Query RAGFlow knowledge bases using dataset IDs (for advanced users).
 - `query` (required): Your question or search query
 - `session_name` (optional): Custom session name for organization
 - `languages` (optional): Array of language codes to search in (e.g., ["en", "de", "es"]). Defaults to ["en", "de"]
+- `top_n` (optional): Number of top chunks above similarity threshold to feed to LLM. Defaults to 10.
+- `similarity_threshold` (optional): Minimum similarity score for chunks (0.0 to 1.0). Defaults to 0.2.
 
 ### 3. `ragflow_list_datasets`
 List all available knowledge bases in your RAGFlow instance.
@@ -104,12 +110,37 @@ Reset/clear the chat session for a specific dataset when encountering session ow
 **Parameters:**
 - `dataset_id` (required): ID of the dataset to reset session for
 
+## Result Control and Filtering
+
+### Enhanced Query Parameters
+The server now supports fine-tuned control over query results:
+
+- **`top_n`**: Controls the number of document chunks fed to the LLM (default: 10, previously 1)
+- **`similarity_threshold`**: Filters chunks based on relevance score (default: 0.2, range: 0.0-1.0)
+
+### Result Optimization Tips
+- **For broader results**: Use `top_n=15` and `similarity_threshold=0.15`
+- **For precise results**: Use `top_n=5` and `similarity_threshold=0.4`
+- **For comprehensive analysis**: Use `top_n=20` and `similarity_threshold=0.1`
+
 ## Usage Examples
 
 ### Basic Query by Dataset Name
 
 ```
 Please use the ragflow_query_by_name tool with dataset_name "BASF", session_name "basf-financial-analysis", and query "What is BASF's latest income statement? Please provide the revenue, operating income, net income, and other key financial figures."
+```
+
+### Enhanced Query with Custom Result Limits
+
+```
+Please use the ragflow_query_by_name tool with dataset_name "BASF", session_name "comprehensive-analysis", query "Analyze BASF's financial performance and business strategy", top_n 15, and similarity_threshold 0.15 for comprehensive results.
+```
+
+### Precise Query with High Similarity Threshold
+
+```
+Please use the ragflow_query_by_name tool with dataset_name "BASF", session_name "precise-search", query "What is BASF's exact revenue for Q4 2023?", top_n 5, and similarity_threshold 0.4 for highly relevant results only.
 ```
 
 ### Cross-Language Query
@@ -144,20 +175,34 @@ Please use the ragflow_query_by_name tool with dataset_name "BASF" and query "Wh
 Please use the ragflow_reset_session tool with dataset_id "43066ee0599411f089787a39c10de57b" to clear any problematic sessions, then retry your query.
 ```
 
-## Sample Prompt for Claude Desktop
+## Sample Prompts for Claude Desktop
 
-Here's a comprehensive prompt you can use in Claude Desktop:
-
+### Comprehensive Financial Analysis
 ```
 I need to analyze BASF's financial performance. Please help me by:
 
-1. First, use the ragflow_query_by_name tool to search the "BASF" knowledge base for their latest income statement. Ask for revenue, operating income, net income, and key financial figures.
+1. First, use the ragflow_query_by_name tool to search the "BASF" knowledge base for their latest income statement. Ask for revenue, operating income, net income, and key financial figures. Use top_n 15 and similarity_threshold 0.15 for comprehensive results.
 
-2. Then, ask a follow-up question about their cash flow statement using the same dataset.
+2. Then, ask a follow-up question about their cash flow statement using the same dataset with top_n 10 and similarity_threshold 0.2.
 
-3. Finally, inquire about any significant changes in their financial performance compared to the previous year.
+3. Finally, inquire about any significant changes in their financial performance compared to the previous year using top_n 12 and similarity_threshold 0.18.
 
 Please use session_name "basf-financial-analysis" for better organization.
+```
+
+### Precision Search Query
+```
+I need to find specific financial metrics for BASF. Please use the ragflow_query_by_name tool with dataset_name "BASF", session_name "precision-search", query "What were BASF's exact Q4 2023 revenue figures and operating margin?", top_n 5, and similarity_threshold 0.45 to get only the most relevant and precise results.
+```
+
+### Multi-Language Research
+```
+Please conduct a comprehensive multilingual search about BASF's sustainability initiatives. Use ragflow_query_by_name with dataset_name "BASF", session_name "sustainability-research", query "Find information about BASF's environmental sustainability programs, carbon reduction targets, and green chemistry initiatives", languages ["en", "de", "fr"], top_n 20, and similarity_threshold 0.12 for broad coverage across languages.
+```
+
+### Comparative Analysis
+```
+I need to compare BASF's performance across different business segments. Please use ragflow_query_by_name with dataset_name "BASF", session_name "segment-analysis", query "Compare the financial performance of BASF's different business segments including Chemicals, Materials, Industrial Solutions, Surface Technologies, Nutrition & Health, and Agricultural Solutions", top_n 18, and similarity_threshold 0.16 for comprehensive segment data.
 ```
 
 ### Enhanced Single Query Prompt
@@ -173,6 +218,12 @@ Please use the ragflow_query_by_name tool with dataset_name "Company Research", 
 ```
 
 ## Technical Details
+
+### Result Control and Optimization
+- **Enhanced Query Performance**: Default `top_n` increased from 1 to 10 chunks for more comprehensive responses
+- **Similarity Filtering**: `similarity_threshold` parameter filters chunks based on relevance scores (0.0-1.0)
+- **Customizable Result Limits**: Both parameters can be adjusted per query for optimal results
+- **Backward Compatibility**: All existing queries continue to work with improved defaults
 
 ### Cross-Language Features
 - **Default Languages**: English (`en`) and German (`de`) are set as defaults
