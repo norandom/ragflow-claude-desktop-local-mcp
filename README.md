@@ -1,6 +1,9 @@
 # RAGFlow Claude MCP Server
 
-A Model Context Protocol (MCP) server that provides seamless integration between Claude Desktop and RAGFlow's REST API for knowledge base querying and document management.
+A Model Context Protocol (MCP) server that provides seamless integration between tools like Claude Desktop and RAGFlow's REST API for knowledge base querying and document management.
+It enriches the context of the LLMs. 
+
+This is a persoal-use software, which I create for my own RnD. It's not bug-free, and certainly not high quality code. But it gets the job done. :) 
 
 ## Features
 
@@ -12,7 +15,6 @@ A Model Context Protocol (MCP) server that provides seamless integration between
 - **Source References**: Each chunk includes document ID, similarity scores, and highlighted matches
 - **Enhanced Error Handling**: Clear error messages and dataset suggestions
 - **Multiple Query Methods**: Support for both ID-based and name-based queries
-- **No Server Dependencies**: Works independently of chat completion configurations
 
 ## Installation
 
