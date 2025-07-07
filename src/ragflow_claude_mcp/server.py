@@ -206,9 +206,28 @@ Please provide responses that include information found in any of the specified 
 # Initialize the MCP server
 server = Server("ragflow-mcp")
 
-# RAGFlow configuration from environment variables
-RAGFLOW_BASE_URL = os.getenv("RAGFLOW_BASE_URL", "http://192.168.122.93:9380")
-RAGFLOW_API_KEY = os.getenv("RAGFLOW_API_KEY", "ragflow-A1NGY4NjEwNTk5NzExZjA4YWFkN2EzOW")
+# Load configuration from config.json
+def load_config():
+    """Load configuration from config.json"""
+    try:
+        with open("config.json", "r") as f:
+            config = json.load(f)
+        return config
+    except FileNotFoundError:
+        logger.error("config.json not found. Please create it based on config.json.sample")
+        return {}
+    except json.JSONDecodeError:
+        logger.error("Error decoding config.json. Please check its format.")
+        return {}
+
+config = load_config()
+
+# RAGFlow configuration
+RAGFLOW_BASE_URL = os.getenv("RAGFLOW_BASE_URL", config.get("RAGFLOW_BASE_URL"))
+RAGFLOW_API_KEY = os.getenv("RAGFLOW_API_KEY", config.get("RAGFLOW_API_KEY"))
+
+if not RAGFLOW_BASE_URL or not RAGFLOW_API_KEY:
+    raise ValueError("RAGFLOW_BASE_URL and RAGFLOW_API_KEY must be set in config.json or environment variables")
 
 ragflow_client = RAGFlowMCPServer(RAGFLOW_BASE_URL, RAGFLOW_API_KEY)
 

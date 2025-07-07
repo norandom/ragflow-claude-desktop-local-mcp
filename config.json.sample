@@ -1,0 +1,4 @@
+{
+  "RAGFLOW_BASE_URL": "http://your-ragflow-ip:9380",
+  "RAGFLOW_API_KEY": "your-ragflow-api-key"
+}

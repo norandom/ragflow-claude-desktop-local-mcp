@@ -26,11 +26,14 @@ A Model Context Protocol (MCP) server that provides seamless integration between
    uv install
    ```
 
-3. Configure environment variables:
+3. Configure the server:
+   Create a `config.json` file by copying the `config.json.sample` file:
    ```bash
-   export RAGFLOW_BASE_URL="http://your-ragflow-server:port"
-   export RAGFLOW_API_KEY="your-api-key"
+   cp config.json.sample config.json
    ```
+   Then, edit `config.json` with your RAGFlow server details:
+   - `RAGFLOW_BASE_URL`: The URL of your RAGFlow instance (e.g., "http://your-ragflow-server:port").
+   - `RAGFLOW_API_KEY`: Your RAGFlow API key.
 
 ## Claude Desktop Configuration
 
@@ -46,11 +49,7 @@ Add the following to your Claude Desktop MCP configuration:
         "--directory",
         "/path/to/ragflow-claude-desktop-local-mcp",
         "ragflow-claude-mcp"
-      ],
-      "env": {
-        "RAGFLOW_BASE_URL": "http://192.168.122.93:9380",
-        "RAGFLOW_API_KEY": "your-ragflow-api-key"
-      }
+      ]
     }
   }
 }
