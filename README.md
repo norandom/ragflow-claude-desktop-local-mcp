@@ -99,12 +99,12 @@ Get document chunks with references from a specific document.
 - `document_id` (required): ID of the document
 
 ### 6. `ragflow_list_sessions`
-Show active chat sessions for all datasets.
+Show active chat sessions for all datasets (legacy compatibility).
 
 **Parameters:** None
 
 ### 7. `ragflow_reset_session`
-Reset/clear the chat session for a specific dataset.
+Reset/clear the chat session for a specific dataset (legacy compatibility).
 
 **Parameters:**
 - `dataset_id` (required): ID of the dataset to reset session for
@@ -225,10 +225,10 @@ Please help me explore the BASF dataset by:
 - **Flexible Pagination**: Retrieve results in manageable batches with full control
 
 ### Session Management (Legacy)
-- Session management tools are available for compatibility
-- `ragflow_list_sessions` shows active chat sessions
+- Session management tools are available for compatibility with legacy workflows
+- `ragflow_list_sessions` shows active chat sessions  
 - `ragflow_reset_session` clears problematic sessions
-- Note: Retrieval tools don't require session management
+- **Note:** Retrieval tools (`ragflow_retrieval` and `ragflow_retrieval_by_name`) don't require session management
 
 ### Dataset Lookup
 - Case-insensitive name matching
@@ -270,9 +270,7 @@ The server will start and listen for MCP requests via stdio.
 ## Troubleshooting
 
 1. **"Dataset not found" errors**: Use `ragflow_list_datasets` to see available datasets
-2. **"You don't own the chat" errors**: The server now automatically handles this by creating new sessions and retrying. If issues persist, use `ragflow_reset_session` to manually clear problematic sessions.
-3. **Session ownership issues**: Use `ragflow_reset_session` with the dataset ID to clear the session, then retry your query
-4. **Connection errors**: Verify your `RAGFLOW_BASE_URL` and `RAGFLOW_API_KEY` are correct
-5. **Server won't start**: Check that all dependencies are installed with `uv install`
-6. **Persistent session errors**: Check `ragflow_list_sessions` to see active sessions and reset individual datasets as needed
-7. **Need raw document access**: Use `ragflow_retrieval_by_name` or `ragflow_retrieval` for direct document chunk access
+2. **Connection errors**: Verify your `RAGFLOW_BASE_URL` and `RAGFLOW_API_KEY` are correct
+3. **Server won't start**: Check that all dependencies are installed with `uv install`
+4. **Need raw document access**: Use `ragflow_retrieval_by_name` or `ragflow_retrieval` for direct document chunk access
+5. **Legacy session issues**: If using session tools, check `ragflow_list_sessions` and use `ragflow_reset_session` if needed
