@@ -101,12 +101,12 @@ Get document chunks with references from a specific document.
 - `document_id` (required): ID of the document
 
 ### 6. `ragflow_list_sessions`
-Show active chat sessions for all datasets (legacy compatibility).
+Show active chat sessions for all datasets.
 
 **Parameters:** None
 
 ### 7. `ragflow_reset_session`
-Reset/clear the chat session for a specific dataset (legacy compatibility).
+Reset/clear the chat session for a specific dataset.
 
 **Parameters:**
 - `dataset_id` (required): ID of the dataset to reset session for
@@ -226,8 +226,8 @@ Please help me explore the BASF dataset by:
 - **Source References**: Full document and chunk location information provided
 - **Flexible Pagination**: Retrieve results in manageable batches with full control
 
-### Session Management (Legacy)
-- Session management tools are available for compatibility with legacy workflows
+### Session Management
+- Session management tools are available for workflow compatibility
 - `ragflow_list_sessions` shows active chat sessions  
 - `ragflow_reset_session` clears problematic sessions
 - **Note:** Retrieval tools (`ragflow_retrieval` and `ragflow_retrieval_by_name`) don't require session management
@@ -267,7 +267,7 @@ The server will start and listen for MCP requests via stdio.
 - **Primary Tools**: Use `ragflow_retrieval_by_name` and `ragflow_retrieval` for document search
 - **Direct Access**: Retrieval API provides raw document chunks without LLM processing
 - **Better Control**: Full pagination and similarity filtering control
-- **No Dependencies**: Works independently of chat completion configurations
+- **No Dependencies**: Works independently of server-side configurations
 
 ## Troubleshooting
 
@@ -275,4 +275,4 @@ The server will start and listen for MCP requests via stdio.
 2. **Connection errors**: Verify your `RAGFLOW_BASE_URL` and `RAGFLOW_API_KEY` are correct
 3. **Server won't start**: Check that all dependencies are installed with `uv install`
 4. **Need raw document access**: Use `ragflow_retrieval_by_name` or `ragflow_retrieval` for direct document chunk access
-5. **Legacy session issues**: If using session tools, check `ragflow_list_sessions` and use `ragflow_reset_session` if needed
+5. **Session issues**: If using session tools, check `ragflow_list_sessions` and use `ragflow_reset_session` if needed

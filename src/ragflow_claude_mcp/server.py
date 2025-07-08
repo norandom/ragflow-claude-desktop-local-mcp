@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 RAGFlow MCP Server
-A Model Context Protocol server that provides tools to interact with RAGFlow's REST API.
+A Model Context Protocol server that provides tools to interact with RAGFlow's retrieval API.
 """
 
 import asyncio
@@ -52,112 +52,10 @@ class RAGFlowMCPServer:
                 logger.error(f"Request failed: {e}")
                 raise
 
-    async def create_chat_session(self, dataset_id: str, session_name: Optional[str] = None) -> str:
-        """Create a new chat session in RAGFlow"""
-        # Generate unique chat_id
-        timestamp = int(time.time())
-        if session_name:
-            chat_id = f"{session_name}-{timestamp}"
-        else:
-            chat_id = f"ragflow-session-{timestamp}"
-        
-        # Create the chat session via RAGFlow API
-        endpoint = "/api/v1/chats"
-        data = {
-            "name": chat_id,
-            "dataset_ids": [dataset_id]
-        }
-        
-        try:
-            result = await self._make_request("POST", endpoint, data)
-            if result.get("code") == 0:
-                # Use the chat ID returned by RAGFlow
-                actual_chat_id = result.get("data", {}).get("id", chat_id)
-                self.active_sessions[dataset_id] = actual_chat_id
-                logger.info(f"Created chat session: {actual_chat_id} for dataset: {dataset_id}")
-                return actual_chat_id
-            else:
-                logger.error(f"Failed to create chat session: {result}")
-                # Fall back to generated ID
-                self.active_sessions[dataset_id] = chat_id
-                return chat_id
-        except Exception as e:
-            logger.error(f"Error creating chat session: {e}")
-            # Fall back to generated ID
-            self.active_sessions[dataset_id] = chat_id
-            return chat_id
 
-    def get_or_create_session(self, dataset_id: str, session_name: Optional[str] = None) -> str:
-        """Get existing session or generate new one for a dataset"""
-        if dataset_id in self.active_sessions:
-            return self.active_sessions[dataset_id]
-        
-        # Generate unique chat_id (will be properly created during query)
-        timestamp = int(time.time())
-        if session_name:
-            chat_id = f"{session_name}-{timestamp}"
-        else:
-            chat_id = f"ragflow-session-{timestamp}"
-        
-        self.active_sessions[dataset_id] = chat_id
-        return chat_id
-
-    async def query_ragflow(self, dataset_id: str, query: str, session_name: Optional[str] = None, stream: bool = False, languages: Optional[List[str]] = None, top_n: int = 10, similarity_threshold: float = 0.2) -> Dict[str, Any]:
-        """Query RAGFlow using chat completions endpoint with cross-language support"""
-        # Default to English and German if no languages specified
-        if languages is None:
-            languages = ["en", "de"]
-        
-        # Check if we have an existing session
-        if dataset_id not in self.active_sessions:
-            # Create a new chat session
-            chat_id = await self.create_chat_session(dataset_id, session_name)
-        else:
-            chat_id = self.active_sessions[dataset_id]
-        
-        # Enhance query with cross-language instructions
-        enhanced_query = f"""Please search for information in multiple languages (primarily English and German) and provide a comprehensive answer. 
-
-Languages to consider: {', '.join(languages)}
-
-Original query: {query}
-
-Please provide responses that include information found in any of the specified languages. When relevant content is found in different languages, provide translations or summaries as appropriate. Use context7 for up-to-date documentation and cross-language queries when possible."""
-        
-        endpoint = f"/api/v1/chats_openai/{chat_id}/chat/completions"
-        data = {
-            "model": "ragflow",
-            "messages": [{"role": "user", "content": enhanced_query}],
-            "stream": stream,
-            "dataset_id": dataset_id,
-            "top_n": top_n,
-            "similarity_threshold": similarity_threshold
-        }
-        
-        try:
-            result = await self._make_request("POST", endpoint, data)
-            
-            # If we get a session ownership error, try creating a new session
-            if result.get("code") == 102 and "don't own the chat" in result.get("message", ""):
-                logger.info(f"Session ownership issue, creating new session for dataset {dataset_id}")
-                # Remove the old session
-                if dataset_id in self.active_sessions:
-                    del self.active_sessions[dataset_id]
-                # Create a new session
-                chat_id = await self.create_chat_session(dataset_id, session_name)
-                # Retry the query
-                endpoint = f"/api/v1/chats_openai/{chat_id}/chat/completions"
-                data["dataset_id"] = dataset_id  # Ensure dataset_id is included
-                result = await self._make_request("POST", endpoint, data)
-            
-            return result
-            
-        except Exception as e:
-            logger.error(f"Query failed: {e}")
-            raise
 
     async def retrieval_query(self, dataset_id: str, query: str, top_k: int = 1024, similarity_threshold: float = 0.2, page: int = 1, page_size: int = 10) -> Dict[str, Any]:
-        """Query RAGFlow using dedicated retrieval endpoint (alternative to chat completions)"""
+        """Query RAGFlow using dedicated retrieval endpoint for direct document access"""
         endpoint = "/api/v1/retrieval"
         data = {
             "question": query,
@@ -256,42 +154,6 @@ ragflow_client = RAGFlowMCPServer(RAGFLOW_BASE_URL, RAGFLOW_API_KEY)
 async def handle_list_tools() -> List[types.Tool]:
     """List available tools"""
     return [
-        # DISABLED: Chat completion tools have server-side config issues
-        # types.Tool(
-        #     name="ragflow_query",
-        #     description="Query RAGFlow knowledge base and get answers with references. Sessions are automatically managed per dataset.",
-        #     inputSchema={
-        #         "type": "object",
-        #         "properties": {
-        #             "dataset_id": {
-        #                 "type": "string",
-        #                 "description": "ID of the dataset/knowledge base to query"
-        #             },
-        #             "query": {
-        #                 "type": "string",
-        #                 "description": "Question or query to ask RAGFlow"
-        #             },
-        #             "session_name": {
-        #                 "type": "string",
-        #                 "description": "Optional session name for the chat (e.g., 'basf-financial-analysis'). If not provided, a default session will be used."
-        #             },
-        #             "languages": {
-        #                 "type": "array",
-        #                 "items": {"type": "string"},
-        #                 "description": "Optional list of language codes to search in (e.g., ['en', 'de']). Defaults to ['en', 'de'] for English and German."
-        #             },
-        #             "top_n": {
-        #                 "type": "integer",
-        #                 "description": "Number of top chunks above similarity threshold to feed to LLM. Defaults to 10."
-        #             },
-        #             "similarity_threshold": {
-        #                 "type": "number",
-        #                 "description": "Minimum similarity score for chunks (0.0 to 1.0). Defaults to 0.2."
-        #             }
-        #         },
-        #         "required": ["dataset_id", "query"]
-        #     }
-        # ),
         types.Tool(
             name="ragflow_list_datasets",
             description="List all available datasets/knowledge bases in RAGFlow",
@@ -356,7 +218,7 @@ async def handle_list_tools() -> List[types.Tool]:
         ),
         types.Tool(
             name="ragflow_retrieval",
-            description="Retrieve document chunks directly from RAGFlow datasets using the retrieval API (alternative to chat completions). Returns raw chunks with similarity scores.",
+            description="Retrieve document chunks directly from RAGFlow datasets using the retrieval API. Returns raw chunks with similarity scores.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -390,7 +252,7 @@ async def handle_list_tools() -> List[types.Tool]:
         ),
         types.Tool(
             name="ragflow_retrieval_by_name",
-            description="Retrieve document chunks by dataset name using the retrieval API (alternative to chat completions). Returns raw chunks with similarity scores.",
+            description="Retrieve document chunks by dataset name using the retrieval API. Returns raw chunks with similarity scores.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -422,42 +284,6 @@ async def handle_list_tools() -> List[types.Tool]:
                 "required": ["dataset_name", "query"]
             }
         )
-        # DISABLED: Chat completion tools have server-side config issues
-        # types.Tool(
-        #     name="ragflow_query_by_name",
-        #     description="Query RAGFlow knowledge base by dataset name instead of ID. Perfect for when you only know the dataset name like 'BASF'.",
-        #     inputSchema={
-        #         "type": "object",
-        #         "properties": {
-        #             "dataset_name": {
-        #                 "type": "string",
-        #                 "description": "Name of the dataset/knowledge base to query (e.g., 'BASF', 'Company Reports')"
-        #             },
-        #             "query": {
-        #                 "type": "string",
-        #                 "description": "Question or query to ask RAGFlow"
-        #             },
-        #             "session_name": {
-        #                 "type": "string",
-        #                 "description": "Optional session name for the chat (e.g., 'basf-financial-analysis')"
-        #             },
-        #             "languages": {
-        #                 "type": "array",
-        #                 "items": {"type": "string"},
-        #                 "description": "Optional list of language codes to search in (e.g., ['en', 'de']). Defaults to ['en', 'de'] for English and German."
-        #             },
-        #             "top_n": {
-        #                 "type": "integer",
-        #                 "description": "Number of top chunks above similarity threshold to feed to LLM. Defaults to 10."
-        #             },
-        #             "similarity_threshold": {
-        #                 "type": "number",
-        #                 "description": "Minimum similarity score for chunks (0.0 to 1.0). Defaults to 0.2."
-        #             }
-        #         },
-        #         "required": ["dataset_name", "query"]
-        #     }
-        # )
     ]
 
 @server.call_tool()
@@ -466,17 +292,6 @@ async def handle_call_tool(
 ) -> List[types.TextContent]:
     """Handle tool calls"""
     try:
-        # DISABLED: Chat completion tools have server-side config issues
-        # if name == "ragflow_query":
-        #     result = await ragflow_client.query_ragflow(
-        #         dataset_id=arguments["dataset_id"],
-        #         query=arguments["query"],
-        #         session_name=arguments.get("session_name"),
-        #         languages=arguments.get("languages"),
-        #         top_n=arguments.get("top_n", 10),
-        #         similarity_threshold=arguments.get("similarity_threshold", 0.2)
-        #     )
-        #     return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
             
         if name == "ragflow_list_datasets":
             result = await ragflow_client.list_datasets()
@@ -542,34 +357,6 @@ async def handle_call_tool(
             }
             return [types.TextContent(type="text", text=json.dumps(response_data, indent=2))]
             
-        # DISABLED: Chat completion tools have server-side config issues  
-        # elif name == "ragflow_query_by_name":
-        #     dataset_name = arguments["dataset_name"]
-        #     dataset_id = await ragflow_client.find_dataset_by_name(dataset_name)
-        #     
-        #     if not dataset_id:
-        #         available_datasets = list(ragflow_client.dataset_cache.keys()) if ragflow_client.dataset_cache else []
-        #         error_msg = f"Dataset '{dataset_name}' not found. Available datasets: {available_datasets}"
-        #         return [types.TextContent(type="text", text=error_msg)]
-        #     
-        #     result = await ragflow_client.query_ragflow(
-        #         dataset_id=dataset_id,
-        #         query=arguments["query"],
-        #         session_name=arguments.get("session_name"),
-        #         languages=arguments.get("languages"),
-        #         top_n=arguments.get("top_n", 10),
-        #         similarity_threshold=arguments.get("similarity_threshold", 0.2)
-        #     )
-        #     
-        #     # Include dataset info in response
-        #     response_data = {
-        #         "dataset_found": {
-        #             "name": dataset_name,
-        #             "id": dataset_id
-        #         },
-        #         "query_result": result
-        #     }
-        #     return [types.TextContent(type="text", text=json.dumps(response_data, indent=2))]
             
         elif name == "ragflow_reset_session":
             dataset_id = arguments["dataset_id"]
