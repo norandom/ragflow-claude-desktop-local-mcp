@@ -11,6 +11,7 @@ dependencies = [
     "aiohttp>=3.12.13",
     "mcp>=1.10.1",
     "dspy-ai>=2.5.0",
+    "dspy",
 ]
 
 [project.scripts]
@@ -19,3 +20,6 @@ ragflow-claude-mcp = "ragflow_claude_mcp.server:main"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.uv.sources]
+dspy = { git = "https://github.com/stanfordnlp/dspy.git" }

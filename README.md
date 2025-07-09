@@ -28,6 +28,10 @@ This is a persoal-use software, which I create for my own RnD. It's not bug-free
 
 2. Install dependencies:
    ```bash
+   # On macOS, install DSPy first to avoid build issues:
+   pip install git+https://github.com/stanfordnlp/dspy.git
+   
+   # Then install all dependencies
    uv install
    ```
 
