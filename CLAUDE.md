@@ -1,4 +1,4 @@
 ## Project Improvement Tasks
-- Disable broken tools in the codebase
-- Update README to list only working tools
-- Investigate expanding results from 1 to 10 for better functionality
+- Propose a plan to optimize the adption of ragflow with dispy https://dspy.ai/ , based on research in docs/rag_dispy.md , use context7 tool for get up to date API information
+- keep the the current way to call the existing MCP ragflow tools from the LLM, use DisPy in the functions to deepen the search inside of the functions. Provide a parameter to the MCP tool calls. 0 - no deepening. Propose an intelligent approach to integrate this well
+- research whether the rerank option of ragflow is being used by the current implementation. Use context7 to find up to date API information of the retrieval calls

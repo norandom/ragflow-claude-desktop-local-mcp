@@ -1,4 +1,7 @@
 {
   "RAGFLOW_BASE_URL": "http://your-ragflow-ip:9380",
-  "RAGFLOW_API_KEY": "your-ragflow-api-key"
+  "RAGFLOW_API_KEY": "your-ragflow-api-key",
+  "RAGFLOW_DEFAULT_RERANK": "rerank-multilingual-v3.0",
+  "DSPY_MODEL": "openai/gpt-4o-mini",
+  "OPENAI_API_KEY": "your-openai-api-key"
 }

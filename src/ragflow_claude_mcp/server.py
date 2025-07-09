@@ -13,6 +13,15 @@ from typing import Any, Dict, List, Optional
 import aiohttp
 from mcp.server import Server
 from mcp.server.models import InitializationOptions
+
+# DSPy integration
+try:
+    import dspy
+    from .dspy_deepening import get_deepener
+    DSPY_AVAILABLE = True
+except ImportError:
+    DSPY_AVAILABLE = False
+    logging.warning("DSPy not available. Query deepening will be disabled.")
 import mcp.server.stdio
 import mcp.types as types
 
@@ -21,9 +30,10 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("ragflow-mcp")
 
 class RAGFlowMCPServer:
-    def __init__(self, base_url: str, api_key: str):
+    def __init__(self, base_url: str, api_key: str, default_rerank: str = None):
         self.base_url = base_url.rstrip('/')
         self.api_key = api_key
+        self.default_rerank = default_rerank
         self.headers = {
             'Authorization': f'Bearer {api_key}',
             'Content-Type': 'application/json'
@@ -54,8 +64,18 @@ class RAGFlowMCPServer:
 
 
 
-    async def retrieval_query(self, dataset_id: str, query: str, top_k: int = 1024, similarity_threshold: float = 0.2, page: int = 1, page_size: int = 10) -> Dict[str, Any]:
-        """Query RAGFlow using dedicated retrieval endpoint for direct document access"""
+    async def retrieval_query(self, dataset_id: str, query: str, top_k: int = 1024, similarity_threshold: float = 0.2, page: int = 1, page_size: int = 10, use_rerank: bool = False) -> Dict[str, Any]:
+        """Query RAGFlow using dedicated retrieval endpoint for direct document access
+        
+        Args:
+            dataset_id: ID of the dataset to search
+            query: Search query
+            top_k: Number of chunks for vector cosine computation
+            similarity_threshold: Minimum similarity score (0.0-1.0)
+            page: Page number for pagination
+            page_size: Number of chunks per page
+            use_rerank: Whether to enable reranking. Default False (uses vector similarity only).
+        """
         endpoint = "/api/v1/retrieval"
         data = {
             "question": query,
@@ -66,12 +86,91 @@ class RAGFlowMCPServer:
             "page_size": page_size
         }
         
+        # Only use reranking if explicitly enabled
+        if use_rerank and self.default_rerank:
+            data["rerank_id"] = self.default_rerank
+        
         try:
             result = await self._make_request("POST", endpoint, data)
             return result
         except Exception as e:
             logger.error(f"Retrieval query failed: {e}")
             raise
+    
+    async def retrieval_with_deepening(self, dataset_id: str, query: str, deepening_level: int = 0, **kwargs) -> Dict[str, Any]:
+        """Enhanced retrieval with optional DSPy query deepening"""
+        
+        # If no deepening requested or DSPy not available, use standard retrieval
+        if deepening_level <= 0 or not DSPY_AVAILABLE:
+            if deepening_level > 0 and not DSPY_AVAILABLE:
+                logger.warning("DSPy deepening requested but not available, falling back to standard retrieval")
+            return await self.retrieval_query(dataset_id, query, **kwargs)
+        
+        # Use DSPy query deepening
+        logger.info(f"Starting DSPy query deepening (level {deepening_level}) for query: '{query}'")
+        
+        try:
+            deepener = get_deepener()
+            
+            # Configure DSPy if needed (this would typically be done once at startup)
+            if not hasattr(dspy.settings, 'lm') or dspy.settings.lm is None:
+                # Configure DSPy using config.json settings
+                try:
+                    # Load configuration
+                    config_path = os.path.expanduser(os.path.join(os.path.dirname(__file__), '..', '..', 'config.json'))
+                    config = {}
+                    
+                    if os.path.exists(config_path):
+                        with open(config_path, 'r') as f:
+                            config = json.load(f)
+                    
+                    # Get DSPy model from config or use default
+                    dspy_model = config.get('DSPY_MODEL', 'openai/gpt-4o-mini')
+                    
+                    # Set OpenAI API key if provided in config
+                    if 'OPENAI_API_KEY' in config:
+                        os.environ['OPENAI_API_KEY'] = config['OPENAI_API_KEY']
+                    
+                    # Configure DSPy
+                    dspy.configure(lm=dspy.LM(dspy_model))
+                    logger.info(f"DSPy configured with model: {dspy_model}")
+                    
+                except Exception as e:
+                    logger.warning(f"Failed to configure DSPy LM: {e}. Falling back to standard retrieval.")
+                    # Fall back to standard retrieval if DSPy configuration fails
+                    return await self.retrieval_query(dataset_id, query, **kwargs)
+            
+            # Perform deepened search
+            deepening_result = await deepener.deepen_search(
+                ragflow_client=self,
+                dataset_id=dataset_id,
+                original_query=query,
+                deepening_level=deepening_level,
+                **kwargs
+            )
+            
+            # Return the enhanced result with additional metadata
+            final_results = deepening_result['results']
+            
+            # Add deepening metadata to the response
+            if 'metadata' not in final_results:
+                final_results['metadata'] = {}
+            
+            final_results['metadata']['deepening'] = {
+                'original_query': deepening_result['original_query'],
+                'final_query': deepening_result['final_query'],
+                'queries_used': deepening_result['queries_used'],
+                'deepening_level': deepening_result['deepening_level'],
+                'refinement_log': deepening_result['refinement_log']
+            }
+            
+            return final_results
+            
+        except Exception as e:
+            logger.error(f"DSPy query deepening failed: {e}")
+            # Fall back to standard retrieval on error
+            logger.info("Falling back to standard retrieval")
+            return await self.retrieval_query(dataset_id, query, **kwargs)
 
     async def list_datasets(self) -> Dict[str, Any]:
         """List available datasets/knowledge bases"""
@@ -144,11 +243,12 @@ config = load_config()
 # RAGFlow configuration
 RAGFLOW_BASE_URL = os.getenv("RAGFLOW_BASE_URL", config.get("RAGFLOW_BASE_URL"))
 RAGFLOW_API_KEY = os.getenv("RAGFLOW_API_KEY", config.get("RAGFLOW_API_KEY"))
+RAGFLOW_DEFAULT_RERANK = config.get("RAGFLOW_DEFAULT_RERANK", "rerank-multilingual-v3.0")
 
 if not RAGFLOW_BASE_URL or not RAGFLOW_API_KEY:
     raise ValueError("RAGFLOW_BASE_URL and RAGFLOW_API_KEY must be set in config.json or environment variables")
 
-ragflow_client = RAGFlowMCPServer(RAGFLOW_BASE_URL, RAGFLOW_API_KEY)
+ragflow_client = RAGFlowMCPServer(RAGFLOW_BASE_URL, RAGFLOW_API_KEY, RAGFLOW_DEFAULT_RERANK)
 
 @server.list_tools()
 async def handle_list_tools() -> List[types.Tool]:
@@ -245,6 +345,16 @@ async def handle_list_tools() -> List[types.Tool]:
                     "page_size": {
                         "type": "integer",
                         "description": "Number of chunks per page. Defaults to 10."
+                    },
+                    "use_rerank": {
+                        "type": "boolean",
+                        "description": "Whether to enable reranking for better result quality. Default: false (uses vector similarity only)."
+                    },
+                    "deepening_level": {
+                        "type": "integer",
+                        "description": "Level of DSPy query refinement (0-3). 0=none, 1=basic refinement, 2=gap analysis, 3=full optimization. Default: 0",
+                        "minimum": 0,
+                        "maximum": 3
                     }
                 },
                 "required": ["dataset_id", "query"]
@@ -279,6 +389,16 @@ async def handle_list_tools() -> List[types.Tool]:
                     "page_size": {
                         "type": "integer",
                         "description": "Number of chunks per page. Defaults to 10."
+                    },
+                    "use_rerank": {
+                        "type": "boolean",
+                        "description": "Whether to enable reranking for better result quality. Default: false (uses vector similarity only)."
+                    },
+                    "deepening_level": {
+                        "type": "integer",
+                        "description": "Level of DSPy query refinement (0-3). 0=none, 1=basic refinement, 2=gap analysis, 3=full optimization. Default: 0",
+                        "minimum": 0,
+                        "maximum": 3
                     }
                 },
                 "required": ["dataset_name", "query"]
@@ -319,14 +439,33 @@ async def handle_call_tool(
             return [types.TextContent(type="text", text=json.dumps(sessions, indent=2))]
             
         elif name == "ragflow_retrieval":
-            result = await ragflow_client.retrieval_query(
-                dataset_id=arguments["dataset_id"],
-                query=arguments["query"],
-                top_k=arguments.get("top_k", 1024),
-                similarity_threshold=arguments.get("similarity_threshold", 0.2),
-                page=arguments.get("page", 1),
-                page_size=arguments.get("page_size", 10)
-            )
+            # Check if deepening is requested
+            deepening_level = arguments.get("deepening_level", 0)
+            
+            if deepening_level > 0:
+                # Use DSPy-enhanced retrieval
+                result = await ragflow_client.retrieval_with_deepening(
+                    dataset_id=arguments["dataset_id"],
+                    query=arguments["query"],
+                    deepening_level=deepening_level,
+                    top_k=arguments.get("top_k", 1024),
+                    similarity_threshold=arguments.get("similarity_threshold", 0.2),
+                    page=arguments.get("page", 1),
+                    page_size=arguments.get("page_size", 10),
+                    use_rerank=arguments.get("use_rerank", False)
+                )
+            else:
+                # Use standard retrieval
+                result = await ragflow_client.retrieval_query(
+                    dataset_id=arguments["dataset_id"],
+                    query=arguments["query"],
+                    top_k=arguments.get("top_k", 1024),
+                    similarity_threshold=arguments.get("similarity_threshold", 0.2),
+                    page=arguments.get("page", 1),
+                    page_size=arguments.get("page_size", 10),
+                    use_rerank=arguments.get("use_rerank", False)
+                )
+            
             return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
             
         elif name == "ragflow_retrieval_by_name":
@@ -338,14 +477,32 @@ async def handle_call_tool(
                 error_msg = f"Dataset '{dataset_name}' not found. Available datasets: {available_datasets}"
                 return [types.TextContent(type="text", text=error_msg)]
             
-            result = await ragflow_client.retrieval_query(
-                dataset_id=dataset_id,
-                query=arguments["query"],
-                top_k=arguments.get("top_k", 1024),
-                similarity_threshold=arguments.get("similarity_threshold", 0.2),
-                page=arguments.get("page", 1),
-                page_size=arguments.get("page_size", 10)
-            )
+            # Check if deepening is requested
+            deepening_level = arguments.get("deepening_level", 0)
+            
+            if deepening_level > 0:
+                # Use DSPy-enhanced retrieval
+                result = await ragflow_client.retrieval_with_deepening(
+                    dataset_id=dataset_id,
+                    query=arguments["query"],
+                    deepening_level=deepening_level,
+                    top_k=arguments.get("top_k", 1024),
+                    similarity_threshold=arguments.get("similarity_threshold", 0.2),
+                    page=arguments.get("page", 1),
+                    page_size=arguments.get("page_size", 10),
+                    use_rerank=arguments.get("use_rerank", False)
+                )
+            else:
+                # Use standard retrieval
+                result = await ragflow_client.retrieval_query(
+                    dataset_id=dataset_id,
+                    query=arguments["query"],
+                    top_k=arguments.get("top_k", 1024),
+                    similarity_threshold=arguments.get("similarity_threshold", 0.2),
+                    page=arguments.get("page", 1),
+                    page_size=arguments.get("page_size", 10),
+                    use_rerank=arguments.get("use_rerank", False)
+                )
             
             # Include dataset info in response
             response_data = {

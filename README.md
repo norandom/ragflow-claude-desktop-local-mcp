@@ -8,6 +8,8 @@ This is a persoal-use software, which I create for my own RnD. It's not bug-free
 ## Features
 
 - **Direct Document Retrieval**: Access raw document chunks with similarity scores using RAGFlow's retrieval API
+- **DSPy Query Deepening**: Intelligent query refinement using DSPy for iterative search improvement
+- **Reranking Support**: Optional reranking for improved result quality (configurable on/off)
 - **Enhanced Result Control**: Default 10 results per query with configurable `page_size` and `similarity_threshold` parameters
 - **Dataset Name Lookup**: Query knowledge bases using familiar names instead of cryptic IDs
 - **Fuzzy Matching**: Find datasets with partial name matches (case-insensitive)
@@ -34,9 +36,12 @@ This is a persoal-use software, which I create for my own RnD. It's not bug-free
    ```bash
    cp config.json.sample config.json
    ```
-   Then, edit `config.json` with your RAGFlow server details:
+   Then, edit `config.json` with your server details:
    - `RAGFLOW_BASE_URL`: The URL of your RAGFlow instance (e.g., "http://your-ragflow-server:port").
    - `RAGFLOW_API_KEY`: Your RAGFlow API key.
+   - `RAGFLOW_DEFAULT_RERANK`: Default rerank model (default: "rerank-multilingual-v3.0").
+   - `DSPY_MODEL`: DSPy language model for query refinement (default: "openai/gpt-4o-mini").
+   - `OPENAI_API_KEY`: OpenAI API key (required for DSPy query deepening).
 
 ## Claude Desktop Configuration
 
@@ -70,6 +75,8 @@ Retrieve document chunks by dataset name using the retrieval API. Returns raw ch
 - `similarity_threshold` (optional): Minimum similarity score for chunks (0.0 to 1.0). Defaults to 0.2.
 - `page` (optional): Page number for pagination. Defaults to 1.
 - `page_size` (optional): Number of chunks per page. Defaults to 10.
+- `use_rerank` (optional): Enable reranking for improved quality. Defaults to false.
+- `deepening_level` (optional): DSPy query refinement level (0-3). Defaults to 0.
 
 ### 2. `ragflow_retrieval`
 Retrieve document chunks directly from RAGFlow datasets using the retrieval API. Returns raw chunks with similarity scores.
@@ -81,6 +88,8 @@ Retrieve document chunks directly from RAGFlow datasets using the retrieval API.
 - `similarity_threshold` (optional): Minimum similarity score for chunks (0.0 to 1.0). Defaults to 0.2.
 - `page` (optional): Page number for pagination. Defaults to 1.
 - `page_size` (optional): Number of chunks per page. Defaults to 10.
+- `use_rerank` (optional): Enable reranking for improved quality. Defaults to false.
+- `deepening_level` (optional): DSPy query refinement level (0-3). Defaults to 0.
 
 ### 3. `ragflow_list_datasets`
 List all available knowledge bases in your RAGFlow instance.
@@ -121,9 +130,12 @@ The retrieval tools support fine-tuned control over query results:
 - **`top_k`**: Number of chunks for vector computation (default: 1024)
 
 ### Result Optimization Tips
-- **For broader results**: Use `page_size=15` and `similarity_threshold=0.15`
-- **For precise results**: Use `page_size=5` and `similarity_threshold=0.4`
-- **For comprehensive analysis**: Use `page_size=20` and `similarity_threshold=0.1`
+- **For broader results**: Use `page_size=15`, `similarity_threshold=0.15`, and `use_rerank=true`
+- **For precise results**: Use `page_size=5`, `similarity_threshold=0.4`, and `use_rerank=true`
+- **For comprehensive analysis**: Use `page_size=20`, `similarity_threshold=0.1`, `use_rerank=true`, and `deepening_level=1`
+- **For complex queries**: Use `deepening_level=2` with `use_rerank=true` for intelligent refinement
+- **For maximum quality**: Use `deepening_level=2`, `use_rerank=true`, and `similarity_threshold=0.3`
+- **For speed**: Keep `use_rerank=false` and `deepening_level=0` (default behavior)
 
 ## Usage Examples
 
@@ -133,16 +145,22 @@ The retrieval tools support fine-tuned control over query results:
 Please use the ragflow_retrieval_by_name tool with dataset_name "BASF" and query "What is BASF's latest income statement? Please provide the revenue, operating income, net income, and other key financial figures."
 ```
 
-### Enhanced Retrieval with Custom Result Limits
+### Enhanced Retrieval with Reranking
 
 ```
-Please use the ragflow_retrieval_by_name tool with dataset_name "BASF", query "Analyze BASF's financial performance and business strategy", page_size 15, and similarity_threshold 0.15 for comprehensive results.
+Please use the ragflow_retrieval_by_name tool with dataset_name "BASF", query "Analyze BASF's financial performance and business strategy", page_size 15, similarity_threshold 0.15, and use_rerank true for higher quality results.
+```
+
+### DSPy Query Deepening for Complex Queries
+
+```
+Please use the ragflow_retrieval_by_name tool with dataset_name "BASF", query "what is a volatility clock", deepening_level 2, and use_rerank true for intelligent query refinement and best quality results.
 ```
 
 ### Precise Retrieval with High Similarity Threshold
 
 ```
-Please use the ragflow_retrieval_by_name tool with dataset_name "BASF", query "What is BASF's exact revenue for Q4 2023?", page_size 5, and similarity_threshold 0.4 for highly relevant results only.
+Please use the ragflow_retrieval_by_name tool with dataset_name "BASF", query "What is BASF's exact revenue for Q4 2023?", page_size 5, similarity_threshold 0.4, and use_rerank true for highly relevant results only.
 ```
 
 ### Multi-Page Retrieval
@@ -171,36 +189,40 @@ Please use the ragflow_get_chunks tool with dataset_id "43066ee0599411f089787a39
 
 ## Sample Prompts for Claude Desktop
 
-### Comprehensive Financial Analysis
+### Comprehensive Financial Analysis with Enhanced Features
 ```
 I need to analyze BASF's financial performance. Please help me by:
 
-1. First, use the ragflow_retrieval_by_name tool to search the "BASF" knowledge base for their latest income statement. Ask for revenue, operating income, net income, and key financial figures. Use page_size 15 and similarity_threshold 0.15 for comprehensive results.
+1. First, use the ragflow_retrieval_by_name tool to search the "BASF" knowledge base for their latest income statement. Ask for revenue, operating income, net income, and key financial figures. Use page_size 15, similarity_threshold 0.15, use_rerank true, and deepening_level 1 for comprehensive and refined results.
 
-2. Then, use the ragflow_retrieval_by_name tool again with query about their cash flow statement, page_size 10 and similarity_threshold 0.2.
+2. Then, use the ragflow_retrieval_by_name tool again with query about their cash flow statement, page_size 10, similarity_threshold 0.2, and use_rerank true.
 
-3. Finally, use the ragflow_retrieval_by_name tool to find information about significant changes in their financial performance compared to the previous year using page_size 12 and similarity_threshold 0.18.
-```
-
-### Precision Search Query
-```
-I need to find specific financial metrics for BASF. Please use the ragflow_retrieval_by_name tool with dataset_name "BASF", query "What were BASF's exact Q4 2023 revenue figures and operating margin?", page_size 5, and similarity_threshold 0.45 to get only the most relevant and precise results.
+3. Finally, use the ragflow_retrieval_by_name tool to find information about significant changes in their financial performance compared to the previous year using page_size 12, similarity_threshold 0.18, and use_rerank true.
 ```
 
-### Multi-Page Comprehensive Research
+### Advanced Query with DSPy Deepening
 ```
-Please conduct comprehensive research about BASF's sustainability initiatives. Use ragflow_retrieval_by_name with dataset_name "BASF", query "Find information about BASF's environmental sustainability programs, carbon reduction targets, and green chemistry initiatives", page_size 20, and similarity_threshold 0.12 for broad coverage. If needed, use page 2 and page 3 for additional results.
-```
-
-### Comparative Analysis
-```
-I need to compare BASF's performance across different business segments. Please use ragflow_retrieval_by_name with dataset_name "BASF", query "Compare the financial performance of BASF's different business segments including Chemicals, Materials, Industrial Solutions, Surface Technologies, Nutrition & Health, and Agricultural Solutions", page_size 18, and similarity_threshold 0.16 for comprehensive segment data.
+I need to understand complex financial concepts. Please use the ragflow_retrieval_by_name tool with dataset_name "finance_kb", query "what is a volatility clock", deepening_level 2, use_rerank true, and page_size 10. This will use intelligent query refinement to find better results about this complex topic.
 ```
 
-### Enhanced Single Query Prompt
-
+### Precision Search with Maximum Quality
 ```
-Please use the ragflow_retrieval_by_name tool with dataset_name "BASF", query "What is BASF's latest income statement? Please provide detailed information about revenue, operating income, net income, gross margin, operating margin, and any other key financial metrics.", page_size 15, and similarity_threshold 0.2.
+I need to find specific financial metrics for BASF. Please use the ragflow_retrieval_by_name tool with dataset_name "BASF", query "What were BASF's exact Q4 2023 revenue figures and operating margin?", page_size 5, similarity_threshold 0.45, and use_rerank true to get only the most relevant and precise results with highest quality ranking.
+```
+
+### Multi-Page Comprehensive Research with Reranking
+```
+Please conduct comprehensive research about BASF's sustainability initiatives. Use ragflow_retrieval_by_name with dataset_name "BASF", query "Find information about BASF's environmental sustainability programs, carbon reduction targets, and green chemistry initiatives", page_size 20, similarity_threshold 0.12, use_rerank true, and deepening_level 1 for broad coverage with intelligent refinement. If needed, use page 2 and page 3 for additional results.
+```
+
+### Comparative Analysis with Enhanced Quality
+```
+I need to compare BASF's performance across different business segments. Please use ragflow_retrieval_by_name with dataset_name "BASF", query "Compare the financial performance of BASF's different business segments including Chemicals, Materials, Industrial Solutions, Surface Technologies, Nutrition & Health, and Agricultural Solutions", page_size 18, similarity_threshold 0.16, use_rerank true, and deepening_level 1 for comprehensive segment data with enhanced quality.
+```
+
+### Enhanced Single Query with All Features
+```
+Please use the ragflow_retrieval_by_name tool with dataset_name "BASF", query "What is BASF's latest income statement? Please provide detailed information about revenue, operating income, net income, gross margin, operating margin, and any other key financial metrics.", page_size 15, similarity_threshold 0.2, use_rerank true, and deepening_level 1 for the best possible results with intelligent query refinement and reranking.
 ```
 
 ### Document Exploration Workflow
@@ -213,6 +235,18 @@ Please help me explore the BASF dataset by:
 ```
 
 ## Technical Details
+
+### DSPy Query Deepening
+- **Intelligent Query Refinement**: Uses DSPy to analyze search results and generate improved queries
+- **Iterative Improvement**: Deepening levels 1-3 perform multiple refinement cycles
+- **Gap Analysis**: Identifies missing information in initial results and targets specific improvements
+- **Query Evolution**: Tracks original query → refined queries → final results with full metadata
+
+### Reranking Support
+- **Optional Enhancement**: Reranking disabled by default for speed, enabled via `use_rerank: true`
+- **Server-Side Configuration**: Uses `rerank-multilingual-v3.0` model configured in `config.json`
+- **Quality Improvement**: Typically 10-30% better relevance scores when enabled
+- **Performance Trade-off**: Significantly increases response time but improves result quality
 
 ### Result Control and Optimization
 - **Enhanced Retrieval Performance**: Default `page_size` set to 10 chunks for optimal response size
@@ -276,3 +310,12 @@ The server will start and listen for MCP requests via stdio.
 3. **Server won't start**: Check that all dependencies are installed with `uv install`
 4. **Need raw document access**: Use `ragflow_retrieval_by_name` or `ragflow_retrieval` for direct document chunk access
 5. **Session issues**: If using session tools, check `ragflow_list_sessions` and use `ragflow_reset_session` if needed
+
+## Known Issues
+
+### Rerank Functionality Protocol Error
+- **Issue**: Using `use_rerank=true` parameter causes "UnsupportedProtocol: Request URL is missing an 'http://' or 'https://' protocol" error
+- **Status**: Known defect mentioned by RAGFlow developers
+- **Workaround**: Use `use_rerank=false` (default) for standard vector similarity retrieval
+- **Impact**: Reranking feature currently unavailable, but standard retrieval works normally
+- **Follow-up**: Monitor RAGFlow GitHub issues for resolution

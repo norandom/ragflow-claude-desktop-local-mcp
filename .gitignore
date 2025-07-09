@@ -9,3 +9,7 @@ wheels/
 # Virtual environments
 .venv/
 config.json
+
+# Documentation and project files
+docs/
+CLAUDE.md
