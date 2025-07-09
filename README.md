@@ -9,7 +9,7 @@ This is a persoal-use software, which I create for my own RnD. It's not bug-free
 
 - **Direct Document Retrieval**: Access raw document chunks with similarity scores using RAGFlow's retrieval API
 - **DSPy Query Deepening**: Intelligent query refinement using DSPy for iterative search improvement
-- **Reranking Support**: Optional reranking for improved result quality (configurable on/off)
+~~- **Reranking Support**: Optional reranking for improved result quality (configurable on/off)~~ defect for now, working on it
 - **Enhanced Result Control**: Default 10 results per query with configurable `page_size` and `similarity_threshold` parameters
 - **Dataset Name Lookup**: Query knowledge bases using familiar names instead of cryptic IDs
 - **Fuzzy Matching**: Find datasets with partial name matches (case-insensitive)
@@ -79,7 +79,7 @@ Retrieve document chunks by dataset name using the retrieval API. Returns raw ch
 - `similarity_threshold` (optional): Minimum similarity score for chunks (0.0 to 1.0). Defaults to 0.2.
 - `page` (optional): Page number for pagination. Defaults to 1.
 - `page_size` (optional): Number of chunks per page. Defaults to 10.
-- `use_rerank` (optional): Enable reranking for improved quality. Defaults to false.
+- `use_rerank` (optional): Enable reranking for improved quality. Defaults to false. 
 - `deepening_level` (optional): DSPy query refinement level (0-3). Defaults to 0.
 
 ### 2. `ragflow_retrieval`
@@ -149,7 +149,7 @@ The retrieval tools support fine-tuned control over query results:
 Please use the ragflow_retrieval_by_name tool with dataset_name "BASF" and query "What is BASF's latest income statement? Please provide the revenue, operating income, net income, and other key financial figures."
 ```
 
-### Enhanced Retrieval with Reranking
+### Enhanced Retrieval with Reranking (defect)
 
 ```
 Please use the ragflow_retrieval_by_name tool with dataset_name "BASF", query "Analyze BASF's financial performance and business strategy", page_size 15, similarity_threshold 0.15, and use_rerank true for higher quality results.
@@ -158,7 +158,7 @@ Please use the ragflow_retrieval_by_name tool with dataset_name "BASF", query "A
 ### DSPy Query Deepening for Complex Queries
 
 ```
-Please use the ragflow_retrieval_by_name tool with dataset_name "Quant Literature", query "what is a volatility clock", deepening_level 2, and use_rerank true for intelligent query refinement and best quality results.
+Please use the ragflow_retrieval_by_name tool with dataset_name "Quant Literature", query "what is a volatility clock", deepening_level 2, and use_rerank false for intelligent query refinement and best quality results.
 ```
 
 ### Precise Retrieval with High Similarity Threshold
