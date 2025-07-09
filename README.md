@@ -158,7 +158,7 @@ Please use the ragflow_retrieval_by_name tool with dataset_name "BASF", query "A
 ### DSPy Query Deepening for Complex Queries
 
 ```
-Please use the ragflow_retrieval_by_name tool with dataset_name "BASF", query "what is a volatility clock", deepening_level 2, and use_rerank true for intelligent query refinement and best quality results.
+Please use the ragflow_retrieval_by_name tool with dataset_name "Quant Literature", query "what is a volatility clock", deepening_level 2, and use_rerank true for intelligent query refinement and best quality results.
 ```
 
 ### Precise Retrieval with High Similarity Threshold
