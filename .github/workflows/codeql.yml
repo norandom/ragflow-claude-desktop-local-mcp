@@ -1,0 +1,82 @@
+name: "CodeQL Advanced Security Analysis"
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  schedule:
+    - cron: '0 6 * * 1'  # Weekly on Mondays at 6 AM UTC
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    permissions:
+      # required for all workflows
+      security-events: write
+      # required to fetch internal or private CodeQL packs
+      packages: read
+      # only required for workflows in private repositories
+      actions: read
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - language: python
+          build-mode: none
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v3
+      with:
+        languages: ${{ matrix.language }}
+        build-mode: ${{ matrix.build-mode }}
+        # Enable extended query suites for comprehensive analysis including dataflow
+        queries: +security-extended,security-and-quality
+        # Custom configuration for enhanced dataflow analysis
+        config: |
+          name: "Advanced CodeQL Config"
+          queries:
+            - uses: security-extended
+            - uses: security-and-quality
+          paths-ignore:
+            - "**/*.md"
+            - "**/test/**"
+            - "**/tests/**"
+            - "**/__pycache__/**"
+          # Enable dataflow analysis with extended depth
+          query-filters:
+            - exclude:
+                id: py/unused-import
+        # Increase analysis depth for better dataflow tracking
+        ram: 8192
+        threads: 4
+
+    - name: Set up Python
+      if: matrix.language == 'python'
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install Python dependencies
+      if: matrix.language == 'python'
+      run: |
+        python -m pip install --upgrade pip
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+        if [ -f pyproject.toml ]; then pip install -e .; fi
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v3
+      with:
+        category: "/language:${{ matrix.language }}"
+        # Upload detailed results including dataflow analysis
+        upload: always
+        # Wait for processing to complete
+        wait-for-processing: true
