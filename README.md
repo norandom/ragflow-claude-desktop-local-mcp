@@ -245,6 +245,36 @@ Please help me explore the BASF dataset by:
 - **Iterative Improvement**: Deepening levels 1-3 perform multiple refinement cycles
 - **Gap Analysis**: Identifies missing information in initial results and targets specific improvements
 - **Query Evolution**: Tracks original query → refined queries → final results with full metadata
+- **Multilingual Support**: Automatically handles queries in German, English, and other languages
+
+### Multilingual Queries
+
+The DSPy query deepening system supports multilingual queries and will intelligently handle different languages during refinement:
+
+#### English Queries
+```
+Please use the ragflow_retrieval_by_name tool with dataset_name "BASF", query "What are BASF's main business segments?", deepening_level 2, use_rerank false
+```
+
+#### German Queries
+```
+Please use the ragflow_retrieval_by_name tool with dataset_name "BASF", query "Was sind die wichtigsten Geschäftsbereiche von BASF?", deepening_level 2, use_rerank false
+```
+
+#### Mixed Language Research
+```
+Please use the ragflow_retrieval_by_name tool with dataset_name "Finance KB", query "Volatility clustering und Markteffizienz", deepening_level 2, use_rerank false
+```
+
+**Key Features:**
+- **Automatic Language Detection**: DSPy automatically detects the query language
+- **Intelligent Translation**: When needed, queries are refined in the most appropriate language
+- **Cross-Language Results**: Can find relevant content regardless of document language
+- **Enhanced with Deepening**: Use `deepening_level 1-3` for best multilingual performance
+
+**Requirements:**
+- `DSPY_MODEL`: "openai/gpt-4o-mini" (configured in `config.json`)
+- `OPENAI_API_KEY`: Required for multilingual DSPy functionality
 
 ### Reranking Support
 - **Optional Enhancement**: Reranking disabled by default for speed, enabled via `use_rerank: true`
