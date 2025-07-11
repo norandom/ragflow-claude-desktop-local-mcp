@@ -323,3 +323,24 @@ The server will start and listen for MCP requests via stdio.
 - **Workaround**: Use `use_rerank=false` (default) for standard vector similarity retrieval
 - **Impact**: Reranking feature currently unavailable, but standard retrieval works normally
 - **Follow-up**: Monitor RAGFlow GitHub issues for resolution
+
+## Contributing
+
+We welcome contributions! However, please note that **all changes must be submitted via Pull Requests (PRs)** as the main branch is protected.
+
+### How to Contribute
+
+1. Fork the repository
+2. Create a new branch for your feature/fix: `git checkout -b feature/your-feature-name`
+3. Make your changes and commit them with clear, descriptive messages
+4. Push to your fork: `git push origin feature/your-feature-name`
+5. Open a Pull Request against the main branch
+
+### PR Requirements
+
+- All PRs are automatically scanned for exposed credentials using TruffleHog
+- Ensure your code doesn't contain any API keys, tokens, or secrets
+- Include a clear description of what your PR does and why it's needed
+- Update documentation if you're adding new features
+
+For detailed contribution guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).
