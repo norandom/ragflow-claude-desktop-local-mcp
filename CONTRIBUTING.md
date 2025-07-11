@@ -22,6 +22,16 @@ The `main` branch is protected and requires pull requests for all changes. Direc
    git remote add upstream https://github.com/norandom/ragflow-claude-desktop-local-mcp.git
    ```
 
+4. **Set Up Commit Signing** (Required)
+   ```bash
+   # Configure SSH signing
+   git config --global gpg.format ssh
+   git config --global user.signingkey ~/.ssh/id_ed25519.pub
+   git config --global commit.gpgsign true
+   ```
+   
+   For detailed setup instructions, see [Commit Signing Guide](COMMIT_SIGNING.md).
+
 ## Development Workflow
 
 ### 1. Create a Feature Branch
@@ -80,6 +90,11 @@ git push origin feature/your-feature-name
 ## Pull Request Guidelines
 
 ### PR Requirements
+
+- ✅ **Signed Commits**: All commits MUST be signed with SSH keys
+  - Configure signing before making commits
+  - See [Commit Signing Guide](COMMIT_SIGNING.md) for setup
+  - Unsigned commits will be rejected
 
 - ✅ **No Secrets**: All PRs are automatically scanned by TruffleHog. Do not include:
   - API keys
