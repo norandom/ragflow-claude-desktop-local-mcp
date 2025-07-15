@@ -361,31 +361,45 @@ class RAGFlowMCPServer:
             return await self.retrieval_query(dataset_id, query, document_name=document_name, **kwargs)
 
     async def list_datasets(self) -> Dict[str, Any]:
-        """List available datasets/knowledge bases"""
+        """List available datasets/knowledge bases with improved caching."""
         endpoint = "/api/v1/datasets"
-        result = await self._make_request("GET", endpoint)
         
-        # Cache datasets for name lookup with proper error handling
-        if result.get("code") == 0 and "data" in result:
-            datasets = result["data"]
-            if datasets:
-                self.dataset_cache = {
-                    dataset["name"].lower(): dataset["id"]
-                    for dataset in datasets
-                }
-                self.cache_last_updated = asyncio.get_event_loop().time()
-                logger.info(f"Dataset cache populated with {len(self.dataset_cache)} datasets")
+        try:
+            result = await self._make_request("GET", endpoint)
+            
+            # Validate response structure
+            if not isinstance(result, dict):
+                raise RAGFlowAPIError("Invalid response format from datasets API")
+            
+            # Cache datasets for name lookup with proper error handling
+            if result.get("code") == 0 and "data" in result:
+                datasets = result["data"]
+                if datasets and isinstance(datasets, list):
+                    dataset_mapping = {
+                        dataset["name"]: dataset["id"]
+                        for dataset in datasets
+                        if isinstance(dataset, dict) and "name" in dataset and "id" in dataset
+                    }
+                    
+                    if dataset_mapping:
+                        self.dataset_cache.set_datasets(dataset_mapping)
+                        cache_stats = self.dataset_cache.stats()
+                        logger.info(f"Dataset cache updated with {cache_stats['size']} datasets")
+                    else:
+                        logger.warning("No valid datasets found in API response")
+                else:
+                    logger.warning("Dataset list returned empty or invalid data array")
             else:
-                logger.warning("Dataset list returned empty data array, keeping existing cache")
-                # Don't clear existing cache on empty response - preserve what we have
-        else:
-            logger.error(f"Failed to list datasets: code={result.get('code')}, message={result.get('message', 'Unknown error')}")
-            # Don't clear existing cache on failure, just log the error
-            if not hasattr(self, 'dataset_cache'):
-                self.dataset_cache = {}
-                self.cache_last_updated = None
-        
-        return result
+                error_msg = result.get('message', 'Unknown error')
+                logger.error(f"Failed to list datasets: code={result.get('code')}, message={error_msg}")
+            
+            return result
+            
+        except (RAGFlowAPIError, RAGFlowConnectionError):
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error listing datasets: {redact_sensitive_data(str(e))}")
+            raise RAGFlowAPIError(f"Failed to list datasets: {str(e)}")
 
     async def find_document_by_name(self, dataset_id: str, document_name: str) -> Dict[str, Any]:
         """Find document ID by name within a dataset with ranking and multiple match handling.
@@ -508,37 +522,46 @@ class RAGFlowMCPServer:
         return score
 
     async def find_dataset_by_name(self, name: str) -> Optional[str]:
-        """Find dataset ID by name (case-insensitive)"""
-        # Refresh cache if empty
-        if not self.dataset_cache:
-            logger.info("Dataset cache is empty, refreshing...")
-            try:
-                await self.list_datasets()
-            except Exception as e:
-                logger.error(f"Failed to refresh dataset cache: {e}")
-                return None
+        """Find dataset ID by name (case-insensitive) with validation."""
+        # Validate input
+        name = validate_dataset_name(name)
         
-        # Log current cache state for debugging
-        logger.debug(f"Looking for dataset '{name}' in cache with {len(self.dataset_cache)} entries")
+        # Try to get from cache first
+        dataset_id = self.dataset_cache.get_dataset_id(name)
+        if dataset_id:
+            logger.debug(f"Found dataset '{name}' in cache")
+            return dataset_id
         
-        # Exact match first
+        # Cache miss - refresh and try again
+        logger.info(f"Dataset '{name}' not found in cache, refreshing...")
+        try:
+            await self.list_datasets()
+            dataset_id = self.dataset_cache.get_dataset_id(name)
+            if dataset_id:
+                logger.debug(f"Found dataset '{name}' after cache refresh")
+                return dataset_id
+        except Exception as e:
+            logger.error(f"Failed to refresh dataset cache: {redact_sensitive_data(str(e))}")
+        
+        # Final attempt with fuzzy matching
+        available_names = self.dataset_cache.get_all_names()
         name_lower = name.lower()
-        if name_lower in self.dataset_cache:
-            logger.debug(f"Found exact match for '{name}' -> {self.dataset_cache[name_lower]}")
-            return self.dataset_cache[name_lower]
         
         # Fuzzy match - find datasets containing the name
         matches = [
-            dataset_id for dataset_name, dataset_id in self.dataset_cache.items()
-            if name_lower in dataset_name or dataset_name in name_lower
+            available_name for available_name in available_names
+            if name_lower in available_name or available_name in name_lower
         ]
         
         if matches:
-            logger.debug(f"Found fuzzy match for '{name}' -> {matches[0]}")
-            return matches[0]
-        else:
-            logger.warning(f"No dataset found for '{name}'. Available datasets: {list(self.dataset_cache.keys())}")
-            return None
+            matched_name = matches[0]
+            dataset_id = self.dataset_cache.get_dataset_id(matched_name)
+            logger.info(f"Found fuzzy match for '{name}' -> '{matched_name}'")
+            return dataset_id
+        
+        # Not found
+        logger.warning(f"No dataset found for '{name}'. Available datasets: {available_names[:10]}")
+        raise DatasetNotFoundError(name, available_names)
 
     async def upload_documents(self, dataset_id: str, file_paths: List[str]) -> Dict[str, Any]:
         """Upload documents to a dataset"""
