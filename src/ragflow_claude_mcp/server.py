@@ -89,13 +89,21 @@ class RAGFlowMCPServer:
         }
         
         # Add document filtering if specified
+        document_match_info = None
         if document_name:
-            document_id = await self.find_document_by_name(dataset_id, document_name)
-            if document_id:
-                data["document_ids"] = [document_id]
-                logger.info(f"Filtering results to document '{document_name}' (ID: {document_id})")
+            match_result = await self.find_document_by_name(dataset_id, document_name)
+            if match_result['status'] == 'single_match':
+                data["document_ids"] = [match_result['document_id']]
+                logger.info(f"Filtering results to document '{match_result['document_name']}' (ID: {match_result['document_id']})")
+                document_match_info = match_result
+            elif match_result['status'] == 'multiple_matches':
+                # Use the best match but inform user about alternatives
+                data["document_ids"] = [match_result['document_id']]
+                logger.info(f"Multiple documents match '{document_name}'. Using best match: '{match_result['document_name']}' (ID: {match_result['document_id']})")
+                document_match_info = match_result
             else:
                 logger.warning(f"Document '{document_name}' not found in dataset {dataset_id}, proceeding without filtering")
+                document_match_info = match_result
         
         # Only use reranking if explicitly enabled
         if use_rerank and self.default_rerank:
@@ -103,6 +111,13 @@ class RAGFlowMCPServer:
         
         try:
             result = await self._make_request("POST", endpoint, data)
+            
+            # Add document match information if document filtering was used
+            if document_match_info:
+                if 'metadata' not in result:
+                    result['metadata'] = {}
+                result['metadata']['document_filtering'] = document_match_info
+                
             return result
         except Exception as e:
             logger.error(f"Retrieval query failed: {e}")
@@ -237,28 +252,95 @@ class RAGFlowMCPServer:
         
         return result
 
-    async def find_document_by_name(self, dataset_id: str, document_name: str) -> Optional[str]:
-        """Find document ID by name within a dataset"""
+    async def find_document_by_name(self, dataset_id: str, document_name: str) -> Dict[str, Any]:
+        """Find document ID by name within a dataset with ranking and multiple match handling"""
         try:
             documents_result = await self.list_documents(dataset_id)
             if documents_result.get('code') == 0 and 'data' in documents_result:
                 documents = documents_result['data'].get('docs', [])
                 
-                # Look for exact or partial matches
+                # Find all matching documents
+                matches = []
                 document_name_lower = document_name.lower()
+                
                 for doc in documents:
                     doc_name = doc.get('name', '').lower()
                     if document_name_lower in doc_name or doc_name in document_name_lower:
-                        return doc.get('id')
-                        
-                logger.warning(f"Document '{document_name}' not found in dataset {dataset_id}")
-                return None
+                        # Calculate match score for ranking
+                        score = self._calculate_match_score(doc_name, document_name_lower, doc)
+                        matches.append({
+                            'id': doc.get('id'),
+                            'name': doc.get('name'),
+                            'score': score,
+                            'size': doc.get('size', 0),
+                            'create_time': doc.get('create_time', ''),
+                            'update_time': doc.get('update_time', '')
+                        })
+                
+                if not matches:
+                    logger.warning(f"Document '{document_name}' not found in dataset {dataset_id}")
+                    return {'status': 'not_found', 'matches': []}
+                
+                # Sort by score (higher is better) and then by update time (more recent first)
+                matches.sort(key=lambda x: (x['score'], x['update_time']), reverse=True)
+                
+                if len(matches) == 1:
+                    return {
+                        'status': 'single_match',
+                        'document_id': matches[0]['id'],
+                        'document_name': matches[0]['name'],
+                        'matches': matches
+                    }
+                else:
+                    logger.info(f"Multiple documents match '{document_name}': {[m['name'] for m in matches]}")
+                    return {
+                        'status': 'multiple_matches',
+                        'document_id': matches[0]['id'],  # Use best match as default
+                        'document_name': matches[0]['name'],
+                        'matches': matches
+                    }
             else:
                 logger.error(f"Failed to list documents for dataset {dataset_id}")
-                return None
+                return {'status': 'error', 'matches': []}
         except Exception as e:
             logger.error(f"Error finding document '{document_name}': {e}")
-            return None
+            return {'status': 'error', 'matches': []}
+    
+    def _calculate_match_score(self, doc_name: str, search_term: str, doc: Dict) -> float:
+        """Calculate match score for ranking (higher is better)"""
+        score = 0.0
+        
+        # Exact match gets highest score
+        if doc_name == search_term:
+            score += 100.0
+        
+        # Starts with search term
+        elif doc_name.startswith(search_term):
+            score += 50.0
+        
+        # Contains search term
+        elif search_term in doc_name:
+            score += 30.0
+        
+        # Search term contains document name (partial match)
+        elif doc_name in search_term:
+            score += 20.0
+        
+        # Prefer more recent documents (bonus for newer update times)
+        update_time = doc.get('update_time', '')
+        if update_time:
+            try:
+                # Assume update_time is a timestamp or ISO string
+                # Add small bonus for more recent files
+                score += 0.1
+            except:
+                pass
+                
+        # Prefer documents with certain keywords in name
+        if any(keyword in doc_name for keyword in ['2024', '2023', 'latest', 'current', 'new']):
+            score += 5.0
+            
+        return score
 
     async def find_dataset_by_name(self, name: str) -> Optional[str]:
         """Find dataset ID by name (case-insensitive)"""

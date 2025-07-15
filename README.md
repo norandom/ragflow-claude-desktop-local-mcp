@@ -164,7 +164,7 @@ Please use the ragflow_retrieval_by_name tool with dataset_name "BASF" and query
 Please use the ragflow_retrieval_by_name tool with dataset_name "BASF", document_name "annual_report_2023", and query "What were the key financial highlights for 2023?" to search only within the specific annual report document.
 ```
 
-**Note**: Document names support fuzzy matching - you can use partial names like "annual" to match "annual_report_2023.pdf".
+**Note**: Document names support fuzzy matching - you can use partial names like "annual" to match "annual_report_2023.pdf". When multiple documents match (e.g., "annual" matches both "annual_report_2023.pdf" and "annual_report_2024.pdf"), the system uses the most recent document by default and provides information about all matches in the response metadata for user choice.
 
 ### Enhanced Retrieval with Reranking (defect)
 
@@ -270,6 +270,17 @@ Please conduct targeted research on BASF's sustainability initiatives using docu
 3. Follow up with ragflow_retrieval_by_name using document_name "annual_report_2023" and query "environmental investments and green chemistry initiatives"
 ```
 
+### Handling Multiple Document Matches
+
+```
+When using document_name "annual", the system might find multiple matches:
+- "annual_report_2024.pdf" (most recent, used by default)
+- "annual_report_2023.pdf" 
+- "annual_financial_summary_2023.pdf"
+
+The response metadata will show all matches. To target a specific document, use more specific names like "annual_report_2023" or check the response metadata for exact document names.
+```
+
 ## Technical Details
 
 ### DSPy Query Deepening
@@ -337,6 +348,13 @@ Please use the ragflow_retrieval_by_name tool with dataset_name "Finance KB", qu
 - Fuzzy matching for partial names
 - Automatic caching of dataset information
 - Clear error messages with available dataset suggestions
+
+### Document Matching & Ranking
+- **Intelligent Ranking**: Exact matches > starts with > contains > partial matches
+- **Recency Priority**: Most recent documents (by update time) ranked higher
+- **Multiple Match Handling**: When multiple documents match, uses best-ranked document and provides all options in response metadata
+- **Smart Keywords**: Documents with "2024", "2023", "latest", "current", "new" get ranking boost
+- **User Choice**: Response metadata includes all matching documents for user selection
 
 ### Error Handling
 - Comprehensive error messages for API failures
