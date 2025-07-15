@@ -128,14 +128,40 @@ class RAGFlowMCPServer:
                     # Get DSPy model from config or use default
                     dspy_model = config.get('DSPY_MODEL', 'openai/gpt-4o-mini')
                     
-                    # Set OpenAI API key if provided in config (preserve existing key)
-                    if 'OPENAI_API_KEY' in config and 'OPENAI_API_KEY' not in os.environ:
-                        os.environ['OPENAI_API_KEY'] = config['OPENAI_API_KEY']
-                        logger.debug("Set OpenAI API key from config")
+                    # Configure DSPy with provider-based configuration
+                    lm_kwargs = {}
+                    provider = config.get('PROVIDER', 'openai').lower()
+                    
+                    if provider == 'openrouter':
+                        # Use OpenRouter
+                        if 'OPENROUTER_API_KEY' not in config:
+                            raise ValueError("OPENROUTER_API_KEY must be set when PROVIDER is 'openrouter'")
+                        
+                        if 'OPENAI_API_KEY' not in os.environ:
+                            os.environ['OPENAI_API_KEY'] = config['OPENROUTER_API_KEY']
+                        lm_kwargs['api_base'] = 'https://openrouter.ai/api/v1'
+                        
+                        # Optional OpenRouter headers for analytics
+                        if 'OPENROUTER_SITE_URL' in config:
+                            lm_kwargs['default_headers'] = {
+                                'HTTP-Referer': config['OPENROUTER_SITE_URL'],
+                                'X-Title': config.get('OPENROUTER_SITE_NAME', 'RAGFlow MCP Server')
+                            }
+                        
+                        logger.info(f"DSPy configured with OpenRouter model: {dspy_model}")
+                    elif provider == 'openai':
+                        # Use OpenAI
+                        if 'OPENAI_API_KEY' not in config:
+                            raise ValueError("OPENAI_API_KEY must be set when PROVIDER is 'openai'")
+                        
+                        if 'OPENAI_API_KEY' not in os.environ:
+                            os.environ['OPENAI_API_KEY'] = config['OPENAI_API_KEY']
+                        logger.info(f"DSPy configured with OpenAI model: {dspy_model}")
+                    else:
+                        raise ValueError(f"Unknown provider '{provider}'. Supported providers: 'openai', 'openrouter'")
                     
                     # Configure DSPy
-                    dspy.configure(lm=dspy.LM(dspy_model))
-                    logger.info(f"DSPy configured with model: {dspy_model}")
+                    dspy.configure(lm=dspy.LM(dspy_model, **lm_kwargs))
                     
                 except Exception as e:
                     logger.error(f"Failed to configure DSPy LM: {e}. Falling back to standard retrieval.")
