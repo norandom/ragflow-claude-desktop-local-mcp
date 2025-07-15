@@ -369,18 +369,25 @@ class TestOpenRouterConfiguration:
         )
     
     @patch('ragflow_claude_mcp.dspy_deepening.DSPyQueryDeepener.deepen_search')
+    @patch('os.path.exists')
+    @patch('builtins.open', new_callable=mock_open)
+    @patch('json.load')
     @patch('ragflow_claude_mcp.server.load_config')
     @patch('os.getenv')
     @patch('dspy.configure')
     @patch('dspy.LM')
-    def test_dspy_openrouter_configuration(self, mock_lm, mock_configure, mock_getenv, mock_load_config, mock_deepen_search):
+    def test_dspy_openrouter_configuration(self, mock_lm, mock_configure, mock_getenv, mock_load_config, mock_json_load, mock_open_file, mock_exists, mock_deepen_search):
         """Test DSPy configuration with OpenRouter - should succeed and add metadata."""
         from ragflow_claude_mcp.server import RAGFlowMCPServer
         import asyncio
         
         # Setup mocks
         self._setup_base_mocks(mock_getenv, mock_load_config)
-        mock_load_config.return_value = self._create_openrouter_config()
+        mock_load_config.return_value = {}  # Server init config (not used for DSPy)
+        
+        # Mock config file reading in retrieval_with_deepening method
+        mock_exists.return_value = True
+        mock_json_load.return_value = self._create_openrouter_config()
         mock_deepen_search.return_value = self._create_mock_deepening_result()
         
         # Test
