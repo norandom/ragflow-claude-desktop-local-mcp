@@ -81,8 +81,8 @@ def setup_logging(
     else:
         formatter = HumanReadableFormatter()
     
-    # Console handler
-    console_handler = logging.StreamHandler(sys.stdout)
+    # Console handler - use stderr to avoid interfering with MCP protocol on stdout
+    console_handler = logging.StreamHandler(sys.stderr)
     console_handler.setLevel(numeric_level)
     console_handler.setFormatter(formatter)
     root_logger.addHandler(console_handler)

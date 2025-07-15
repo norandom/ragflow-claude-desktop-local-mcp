@@ -40,14 +40,10 @@ except ImportError:
 import mcp.server.stdio
 import mcp.types as types
 
-# Configure logging
-setup_logging(level="INFO", structured=False)
-logger = get_logger("server")
-
-# Log DSPy availability
-if not DSPY_AVAILABLE:
-    log_warning(logger, "DSPy not available - query deepening will be disabled", 
-               feature="query_deepening", status="disabled")
+# Configure logging - simple setup to avoid import issues
+import sys
+logging.basicConfig(level=logging.INFO, stream=sys.stderr)
+logger = logging.getLogger("ragflow-mcp")
 
 class RAGFlowMCPServer:
     def __init__(self, base_url: str, api_key: str, default_rerank: Optional[str] = None):
@@ -956,8 +952,11 @@ async def handle_call_tool(
 
 def main():
     """Run the MCP server with proper cleanup."""
+    # Log DSPy availability
+    if not DSPY_AVAILABLE:
+        logger.warning("DSPy not available - query deepening will be disabled")
+    
     async def run_server():
-        ragflow_client = None
         try:
             async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
                 await server.run(
