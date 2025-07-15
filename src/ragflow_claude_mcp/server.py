@@ -333,8 +333,9 @@ class RAGFlowMCPServer:
                 # Assume update_time is a timestamp or ISO string
                 # Add small bonus for more recent files
                 score += 0.1
-            except:
-                pass
+            except (ValueError, TypeError):
+                # Ignore invalid timestamp formats
+                logger.debug(f"Invalid update_time format: {update_time}")
                 
         # Prefer documents with certain keywords in name
         if any(keyword in doc_name for keyword in ['2024', '2023', 'latest', 'current', 'new']):
