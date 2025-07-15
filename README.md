@@ -11,7 +11,7 @@ This is a persoal-use software, which I create for my own RnD. It's not bug-free
 - **DSPy Query Deepening**: Intelligent query refinement using DSPy for iterative search improvement
 ~~- **Reranking Support**: Optional reranking for improved result quality (configurable on/off)~~ defect for now, working on it
 - **Enhanced Result Control**: Default 10 results per query with configurable `page_size` and `similarity_threshold` parameters
-- **Document Filtering**: Limit search results to specific documents within a dataset
+- **Document Filtering**: Limit search results to specific documents within a dataset (supports fuzzy matching)
 - **Dataset Name Lookup**: Query knowledge bases using familiar names instead of cryptic IDs
 - **Fuzzy Matching**: Find datasets with partial name matches (case-insensitive)
 - **Pagination Support**: Retrieve results in manageable batches with full pagination control
@@ -76,7 +76,7 @@ Retrieve document chunks by dataset name using the retrieval API. Returns raw ch
 **Parameters:**
 - `dataset_name` (required): Name of the dataset/knowledge base to search (e.g., "BASF")
 - `query` (required): Search query or question
-- `document_name` (optional): Name of document to filter results to specific document
+- `document_name` (optional): Name of document to filter results to specific document (supports partial matching)
 - `top_k` (optional): Number of chunks for vector cosine computation. Defaults to 1024.
 - `similarity_threshold` (optional): Minimum similarity score for chunks (0.0 to 1.0). Defaults to 0.2.
 - `page` (optional): Page number for pagination. Defaults to 1.
@@ -90,7 +90,7 @@ Retrieve document chunks directly from RAGFlow datasets using the retrieval API.
 **Parameters:**
 - `dataset_id` (required): ID of the dataset/knowledge base to search
 - `query` (required): Search query or question
-- `document_name` (optional): Name of document to filter results to specific document
+- `document_name` (optional): Name of document to filter results to specific document (supports partial matching)
 - `top_k` (optional): Number of chunks for vector cosine computation. Defaults to 1024.
 - `similarity_threshold` (optional): Minimum similarity score for chunks (0.0 to 1.0). Defaults to 0.2.
 - `page` (optional): Page number for pagination. Defaults to 1.
@@ -163,6 +163,8 @@ Please use the ragflow_retrieval_by_name tool with dataset_name "BASF" and query
 ```
 Please use the ragflow_retrieval_by_name tool with dataset_name "BASF", document_name "annual_report_2023", and query "What were the key financial highlights for 2023?" to search only within the specific annual report document.
 ```
+
+**Note**: Document names support fuzzy matching - you can use partial names like "annual" to match "annual_report_2023.pdf".
 
 ### Enhanced Retrieval with Reranking (defect)
 
