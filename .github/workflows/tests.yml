@@ -1,0 +1,60 @@
+name: "Tests with Coverage"
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12"]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Install uv
+      uses: astral-sh/setup-uv@v4
+      with:
+        enable-cache: true
+    
+    - name: Install dependencies
+      run: |
+        uv sync --extra test
+        uv add pytest-cov
+    
+    - name: Run tests with coverage
+      run: |
+        uv run python -m pytest tests/ --cov=src/ragflow_claude_mcp --cov-report=xml --cov-report=html --cov-report=term-missing -v
+    
+    - name: Upload coverage reports to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+        token: ${{ secrets.CODECOV_TOKEN }}
+    
+    - name: Upload coverage to GitHub
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-report
+        path: htmlcov/
+    
+    - name: Comment coverage on PR
+      if: github.event_name == 'pull_request'
+      uses: py-cov-action/python-coverage-comment-action@v3
+      with:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        COVERAGE_FILE: coverage.xml
+        MINIMUM_GREEN: 80
+        MINIMUM_ORANGE: 60

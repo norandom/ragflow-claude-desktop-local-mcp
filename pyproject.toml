@@ -19,6 +19,7 @@ test = [
     "pytest>=7.0.0",
     "pytest-asyncio>=0.21.0",
     "pytest-mock>=3.10.0",
+    "pytest-cov>=4.0.0",
 ]
 
 [project.scripts]
@@ -30,3 +31,42 @@ build-backend = "hatchling.build"
 
 [tool.uv.sources]
 dspy = { git = "https://github.com/stanfordnlp/dspy.git" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--verbose",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+]
+
+[tool.coverage.run]
+source = ["src"]
+omit = [
+    "*/tests/*",
+    "*/test_*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
+
+[tool.coverage.html]
+directory = "htmlcov"
