@@ -12,6 +12,9 @@ dependencies = [
     "mcp>=1.10.1",
     "dspy-ai>=2.5.0",
     "dspy",
+    "pytest>=8.4.1",
+    "pytest-asyncio>=1.0.0",
+    "pytest-mock>=3.14.1",
 ]
 
 [project.optional-dependencies]

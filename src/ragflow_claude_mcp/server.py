@@ -293,17 +293,26 @@ def load_config():
         logger.error("Error decoding config.json. Please check its format.")
         return {}
 
-config = load_config()
+def get_ragflow_client():
+    """Get or create the RAGFlow client instance"""
+    global _ragflow_client
+    if _ragflow_client is None:
+        config = load_config()
+        
+        # RAGFlow configuration
+        RAGFLOW_BASE_URL = os.getenv("RAGFLOW_BASE_URL", config.get("RAGFLOW_BASE_URL"))
+        RAGFLOW_API_KEY = os.getenv("RAGFLOW_API_KEY", config.get("RAGFLOW_API_KEY"))
+        RAGFLOW_DEFAULT_RERANK = config.get("RAGFLOW_DEFAULT_RERANK", "rerank-multilingual-v3.0")
 
-# RAGFlow configuration
-RAGFLOW_BASE_URL = os.getenv("RAGFLOW_BASE_URL", config.get("RAGFLOW_BASE_URL"))
-RAGFLOW_API_KEY = os.getenv("RAGFLOW_API_KEY", config.get("RAGFLOW_API_KEY"))
-RAGFLOW_DEFAULT_RERANK = config.get("RAGFLOW_DEFAULT_RERANK", "rerank-multilingual-v3.0")
+        if not RAGFLOW_BASE_URL or not RAGFLOW_API_KEY:
+            raise ValueError("RAGFLOW_BASE_URL and RAGFLOW_API_KEY must be set in config.json or environment variables")
 
-if not RAGFLOW_BASE_URL or not RAGFLOW_API_KEY:
-    raise ValueError("RAGFLOW_BASE_URL and RAGFLOW_API_KEY must be set in config.json or environment variables")
+        _ragflow_client = RAGFlowMCPServer(RAGFLOW_BASE_URL, RAGFLOW_API_KEY, RAGFLOW_DEFAULT_RERANK)
+    
+    return _ragflow_client
 
-ragflow_client = RAGFlowMCPServer(RAGFLOW_BASE_URL, RAGFLOW_API_KEY, RAGFLOW_DEFAULT_RERANK)
+# Global client instance (initialized lazily)
+_ragflow_client = None
 
 @server.list_tools()
 async def handle_list_tools() -> List[types.Tool]:
@@ -469,14 +478,17 @@ async def handle_call_tool(
     try:
             
         if name == "ragflow_list_datasets":
+            ragflow_client = get_ragflow_client()
             result = await ragflow_client.list_datasets()
             return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
             
         elif name == "ragflow_list_documents":
+            ragflow_client = get_ragflow_client()
             result = await ragflow_client.list_documents(arguments["dataset_id"])
             return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
             
         elif name == "ragflow_get_chunks":
+            ragflow_client = get_ragflow_client()
             result = await ragflow_client.get_document_chunks(
                 dataset_id=arguments["dataset_id"],
                 document_id=arguments["document_id"]
@@ -484,6 +496,7 @@ async def handle_call_tool(
             return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
             
         elif name == "ragflow_list_sessions":
+            ragflow_client = get_ragflow_client()
             sessions = {
                 dataset_id: {
                     "chat_id": chat_id,
@@ -494,6 +507,7 @@ async def handle_call_tool(
             return [types.TextContent(type="text", text=json.dumps(sessions, indent=2))]
             
         elif name == "ragflow_retrieval":
+            ragflow_client = get_ragflow_client()
             # Check if deepening is requested
             deepening_level = arguments.get("deepening_level", 0)
             
@@ -524,6 +538,7 @@ async def handle_call_tool(
             return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
             
         elif name == "ragflow_retrieval_by_name":
+            ragflow_client = get_ragflow_client()
             dataset_name = arguments["dataset_name"]
             dataset_id = await ragflow_client.find_dataset_by_name(dataset_name)
             
@@ -580,6 +595,7 @@ async def handle_call_tool(
             
             
         elif name == "ragflow_reset_session":
+            ragflow_client = get_ragflow_client()
             dataset_id = arguments["dataset_id"]
             if dataset_id in ragflow_client.active_sessions:
                 old_session = ragflow_client.active_sessions[dataset_id]
