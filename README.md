@@ -11,6 +11,7 @@ This is a persoal-use software, which I create for my own RnD. It's not bug-free
 - **DSPy Query Deepening**: Intelligent query refinement using DSPy for iterative search improvement
 ~~- **Reranking Support**: Optional reranking for improved result quality (configurable on/off)~~ defect for now, working on it
 - **Enhanced Result Control**: Default 10 results per query with configurable `page_size` and `similarity_threshold` parameters
+- **Document Filtering**: Limit search results to specific documents within a dataset
 - **Dataset Name Lookup**: Query knowledge bases using familiar names instead of cryptic IDs
 - **Fuzzy Matching**: Find datasets with partial name matches (case-insensitive)
 - **Pagination Support**: Retrieve results in manageable batches with full pagination control
@@ -75,6 +76,7 @@ Retrieve document chunks by dataset name using the retrieval API. Returns raw ch
 **Parameters:**
 - `dataset_name` (required): Name of the dataset/knowledge base to search (e.g., "BASF")
 - `query` (required): Search query or question
+- `document_name` (optional): Name of document to filter results to specific document
 - `top_k` (optional): Number of chunks for vector cosine computation. Defaults to 1024.
 - `similarity_threshold` (optional): Minimum similarity score for chunks (0.0 to 1.0). Defaults to 0.2.
 - `page` (optional): Page number for pagination. Defaults to 1.
@@ -88,6 +90,7 @@ Retrieve document chunks directly from RAGFlow datasets using the retrieval API.
 **Parameters:**
 - `dataset_id` (required): ID of the dataset/knowledge base to search
 - `query` (required): Search query or question
+- `document_name` (optional): Name of document to filter results to specific document
 - `top_k` (optional): Number of chunks for vector cosine computation. Defaults to 1024.
 - `similarity_threshold` (optional): Minimum similarity score for chunks (0.0 to 1.0). Defaults to 0.2.
 - `page` (optional): Page number for pagination. Defaults to 1.
@@ -118,7 +121,13 @@ Show active chat sessions for all datasets.
 
 **Parameters:** None
 
-### 7. `ragflow_reset_session`
+### 7. `ragflow_list_documents_by_name`
+List documents in a dataset by dataset name.
+
+**Parameters:**
+- `dataset_name` (required): Name of the dataset/knowledge base to list documents from
+
+### 8. `ragflow_reset_session`
 Reset/clear the chat session for a specific dataset.
 
 **Parameters:**
@@ -147,6 +156,12 @@ The retrieval tools support fine-tuned control over query results:
 
 ```
 Please use the ragflow_retrieval_by_name tool with dataset_name "BASF" and query "What is BASF's latest income statement? Please provide the revenue, operating income, net income, and other key financial figures."
+```
+
+### Document-Specific Search
+
+```
+Please use the ragflow_retrieval_by_name tool with dataset_name "BASF", document_name "annual_report_2023", and query "What were the key financial highlights for 2023?" to search only within the specific annual report document.
 ```
 
 ### Enhanced Retrieval with Reranking (defect)
@@ -183,6 +198,12 @@ Please use the ragflow_list_datasets tool to show me all available knowledge bas
 
 ```
 Please use the ragflow_list_documents tool with dataset_id "43066ee0599411f089787a39c10de57b" to see what BASF documents are available.
+```
+
+### List Documents by Dataset Name
+
+```
+Please use the ragflow_list_documents_by_name tool with dataset_name "BASF" to see all available documents in the BASF knowledge base.
 ```
 
 ### Get Specific Document Chunks
@@ -233,9 +254,18 @@ Please use the ragflow_retrieval_by_name tool with dataset_name "BASF", query "W
 
 ```
 Please help me explore the BASF dataset by:
-1. First using ragflow_list_documents with dataset_id "43066ee0599411f089787a39c10de57b" to see available documents
-2. Then using ragflow_retrieval_by_name with dataset_name "BASF", query "sustainability and environmental initiatives", page_size 10
+1. First using ragflow_list_documents_by_name with dataset_name "BASF" to see available documents
+2. Then using ragflow_retrieval_by_name with dataset_name "BASF", document_name "sustainability_report_2023", query "carbon reduction targets", page_size 10
 3. Finally using ragflow_get_chunks for specific document analysis if needed
+```
+
+### Document-Filtered Research with Advanced Features
+
+```
+Please conduct targeted research on BASF's sustainability initiatives using document filtering:
+1. First, use ragflow_list_documents_by_name with dataset_name "BASF" to see available documents
+2. Then, use ragflow_retrieval_by_name with dataset_name "BASF", document_name "sustainability_report", query "carbon neutrality goals and timeline", page_size 15, similarity_threshold 0.2, use_rerank true, deepening_level 1
+3. Follow up with ragflow_retrieval_by_name using document_name "annual_report_2023" and query "environmental investments and green chemistry initiatives"
 ```
 
 ## Technical Details

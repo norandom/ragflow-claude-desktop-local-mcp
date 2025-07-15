@@ -65,7 +65,7 @@ class RAGFlowMCPServer:
 
 
 
-    async def retrieval_query(self, dataset_id: str, query: str, top_k: int = 1024, similarity_threshold: float = 0.2, page: int = 1, page_size: int = 10, use_rerank: bool = False) -> Dict[str, Any]:
+    async def retrieval_query(self, dataset_id: str, query: str, top_k: int = 1024, similarity_threshold: float = 0.2, page: int = 1, page_size: int = 10, use_rerank: bool = False, document_name: Optional[str] = None) -> Dict[str, Any]:
         """Query RAGFlow using dedicated retrieval endpoint for direct document access
         
         Args:
@@ -76,6 +76,7 @@ class RAGFlowMCPServer:
             page: Page number for pagination
             page_size: Number of chunks per page
             use_rerank: Whether to enable reranking. Default False (uses vector similarity only).
+            document_name: Optional document name to filter results to specific document
         """
         endpoint = "/api/v1/retrieval"
         data = {
@@ -86,6 +87,15 @@ class RAGFlowMCPServer:
             "page": page,
             "page_size": page_size
         }
+        
+        # Add document filtering if specified
+        if document_name:
+            document_id = await self.find_document_by_name(dataset_id, document_name)
+            if document_id:
+                data["document_ids"] = [document_id]
+                logger.info(f"Filtering results to document '{document_name}' (ID: {document_id})")
+            else:
+                logger.warning(f"Document '{document_name}' not found in dataset {dataset_id}, proceeding without filtering")
         
         # Only use reranking if explicitly enabled
         if use_rerank and self.default_rerank:
@@ -98,14 +108,14 @@ class RAGFlowMCPServer:
             logger.error(f"Retrieval query failed: {e}")
             raise
     
-    async def retrieval_with_deepening(self, dataset_id: str, query: str, deepening_level: int = 0, **kwargs) -> Dict[str, Any]:
+    async def retrieval_with_deepening(self, dataset_id: str, query: str, deepening_level: int = 0, document_name: Optional[str] = None, **kwargs) -> Dict[str, Any]:
         """Enhanced retrieval with optional DSPy query deepening"""
         
         # If no deepening requested or DSPy not available, use standard retrieval
         if deepening_level <= 0 or not DSPY_AVAILABLE:
             if deepening_level > 0 and not DSPY_AVAILABLE:
                 logger.warning("DSPy deepening requested but not available, falling back to standard retrieval")
-            return await self.retrieval_query(dataset_id, query, **kwargs)
+            return await self.retrieval_query(dataset_id, query, document_name=document_name, **kwargs)
         
         # Use DSPy query deepening
         logger.info(f"Starting DSPy query deepening (level {deepening_level}) for query: '{query}'")
@@ -166,7 +176,7 @@ class RAGFlowMCPServer:
                 except Exception as e:
                     logger.error(f"Failed to configure DSPy LM: {e}. Falling back to standard retrieval.")
                     # Fall back to standard retrieval if DSPy configuration fails
-                    return await self.retrieval_query(dataset_id, query, **kwargs)
+                    return await self.retrieval_query(dataset_id, query, document_name=document_name, **kwargs)
             
             # Perform deepened search
             deepening_result = await deepener.deepen_search(
@@ -198,7 +208,7 @@ class RAGFlowMCPServer:
             logger.error(f"DSPy query deepening failed: {e}")
             # Fall back to standard retrieval on error
             logger.info("Falling back to standard retrieval")
-            return await self.retrieval_query(dataset_id, query, **kwargs)
+            return await self.retrieval_query(dataset_id, query, document_name=document_name, **kwargs)
 
     async def list_datasets(self) -> Dict[str, Any]:
         """List available datasets/knowledge bases"""
@@ -226,6 +236,29 @@ class RAGFlowMCPServer:
                 self.cache_last_updated = None
         
         return result
+
+    async def find_document_by_name(self, dataset_id: str, document_name: str) -> Optional[str]:
+        """Find document ID by name within a dataset"""
+        try:
+            documents_result = await self.list_documents(dataset_id)
+            if documents_result.get('code') == 0 and 'data' in documents_result:
+                documents = documents_result['data'].get('docs', [])
+                
+                # Look for exact or partial matches
+                document_name_lower = document_name.lower()
+                for doc in documents:
+                    doc_name = doc.get('name', '').lower()
+                    if document_name_lower in doc_name or doc_name in document_name_lower:
+                        return doc.get('id')
+                        
+                logger.warning(f"Document '{document_name}' not found in dataset {dataset_id}")
+                return None
+            else:
+                logger.error(f"Failed to list documents for dataset {dataset_id}")
+                return None
+        except Exception as e:
+            logger.error(f"Error finding document '{document_name}': {e}")
+            return None
 
     async def find_dataset_by_name(self, name: str) -> Optional[str]:
         """Find dataset ID by name (case-insensitive)"""
@@ -394,6 +427,10 @@ async def handle_list_tools() -> List[types.Tool]:
                         "type": "string",
                         "description": "Search query or question"
                     },
+                    "document_name": {
+                        "type": "string",
+                        "description": "Optional document name to filter results to specific document"
+                    },
                     "top_k": {
                         "type": "integer",
                         "description": "Number of chunks for vector cosine computation. Defaults to 1024."
@@ -438,6 +475,10 @@ async def handle_list_tools() -> List[types.Tool]:
                         "type": "string",
                         "description": "Search query or question"
                     },
+                    "document_name": {
+                        "type": "string",
+                        "description": "Optional document name to filter results to specific document"
+                    },
                     "top_k": {
                         "type": "integer",
                         "description": "Number of chunks for vector cosine computation. Defaults to 1024."
@@ -466,6 +507,20 @@ async def handle_list_tools() -> List[types.Tool]:
                     }
                 },
                 "required": ["dataset_name", "query"]
+            }
+        ),
+        types.Tool(
+            name="ragflow_list_documents_by_name",
+            description="List documents in a dataset by dataset name",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "dataset_name": {
+                        "type": "string",
+                        "description": "Name of the dataset/knowledge base to list documents from"
+                    }
+                },
+                "required": ["dataset_name"]
             }
         )
     ]
@@ -521,7 +576,8 @@ async def handle_call_tool(
                     similarity_threshold=arguments.get("similarity_threshold", 0.2),
                     page=arguments.get("page", 1),
                     page_size=arguments.get("page_size", 10),
-                    use_rerank=arguments.get("use_rerank", False)
+                    use_rerank=arguments.get("use_rerank", False),
+                    document_name=arguments.get("document_name")
                 )
             else:
                 # Use standard retrieval
@@ -532,7 +588,8 @@ async def handle_call_tool(
                     similarity_threshold=arguments.get("similarity_threshold", 0.2),
                     page=arguments.get("page", 1),
                     page_size=arguments.get("page_size", 10),
-                    use_rerank=arguments.get("use_rerank", False)
+                    use_rerank=arguments.get("use_rerank", False),
+                    document_name=arguments.get("document_name")
                 )
             
             return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
@@ -569,7 +626,8 @@ async def handle_call_tool(
                     similarity_threshold=arguments.get("similarity_threshold", 0.2),
                     page=arguments.get("page", 1),
                     page_size=arguments.get("page_size", 10),
-                    use_rerank=arguments.get("use_rerank", False)
+                    use_rerank=arguments.get("use_rerank", False),
+                    document_name=arguments.get("document_name")
                 )
             else:
                 # Use standard retrieval
@@ -580,7 +638,8 @@ async def handle_call_tool(
                     similarity_threshold=arguments.get("similarity_threshold", 0.2),
                     page=arguments.get("page", 1),
                     page_size=arguments.get("page_size", 10),
-                    use_rerank=arguments.get("use_rerank", False)
+                    use_rerank=arguments.get("use_rerank", False),
+                    document_name=arguments.get("document_name")
                 )
             
             # Include dataset info in response
@@ -593,6 +652,36 @@ async def handle_call_tool(
             }
             return [types.TextContent(type="text", text=json.dumps(response_data, indent=2))]
             
+        elif name == "ragflow_list_documents_by_name":
+            ragflow_client = get_ragflow_client()
+            dataset_name = arguments["dataset_name"]
+            dataset_id = await ragflow_client.find_dataset_by_name(dataset_name)
+            
+            if not dataset_id:
+                # Force cache refresh and try again
+                logger.warning(f"Dataset '{dataset_name}' not found in cache, forcing refresh...")
+                try:
+                    await ragflow_client.list_datasets()
+                    dataset_id = await ragflow_client.find_dataset_by_name(dataset_name)
+                except Exception as e:
+                    logger.error(f"Failed to refresh dataset cache: {e}")
+                
+                if not dataset_id:
+                    available_datasets = list(ragflow_client.dataset_cache.keys()) if ragflow_client.dataset_cache else []
+                    error_msg = f"Dataset '{dataset_name}' not found after cache refresh. Available datasets: {available_datasets}"
+                    return [types.TextContent(type="text", text=error_msg)]
+            
+            result = await ragflow_client.list_documents(dataset_id)
+            
+            # Include dataset info in response
+            response_data = {
+                "dataset_found": {
+                    "name": dataset_name,
+                    "id": dataset_id
+                },
+                "documents": result
+            }
+            return [types.TextContent(type="text", text=json.dumps(response_data, indent=2))]
             
         elif name == "ragflow_reset_session":
             ragflow_client = get_ragflow_client()

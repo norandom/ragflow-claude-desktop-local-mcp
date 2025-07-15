@@ -1184,13 +1184,10 @@ dependencies = [
     { name = "dspy" },
     { name = "dspy-ai" },
     { name = "mcp" },
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "pytest-mock" },
 ]
 
 [package.optional-dependencies]
-test = [
+dev = [
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
@@ -1203,15 +1200,12 @@ requires-dist = [
     { name = "dspy", git = "https://github.com/stanfordnlp/dspy.git" },
     { name = "dspy-ai", specifier = ">=2.5.0" },
     { name = "mcp", specifier = ">=1.10.1" },
-    { name = "pytest", specifier = ">=8.4.1" },
-    { name = "pytest", marker = "extra == 'test'", specifier = ">=7.0.0" },
-    { name = "pytest-asyncio", specifier = ">=1.0.0" },
-    { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.21.0" },
-    { name = "pytest-cov", marker = "extra == 'test'", specifier = ">=4.0.0" },
-    { name = "pytest-mock", specifier = ">=3.14.1" },
-    { name = "pytest-mock", marker = "extra == 'test'", specifier = ">=3.10.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.4.1" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=1.0.0" },
+    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0.0" },
+    { name = "pytest-mock", marker = "extra == 'dev'", specifier = ">=3.14.1" },
 ]
-provides-extras = ["test"]
+provides-extras = ["dev"]
 
 [[package]]
 name = "referencing"
