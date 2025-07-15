@@ -4,6 +4,7 @@ import json
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch, mock_open
 from ragflow_claude_mcp.server import RAGFlowMCPServer
+from ragflow_claude_mcp.exceptions import DatasetNotFoundError, ConfigurationError
 
 
 class TestRAGFlowMCPServer:
@@ -58,8 +59,9 @@ class TestRAGFlowMCPServer:
             
             assert result["code"] == 0
             assert len(result["data"]) == 3
-            assert server.dataset_cache["test dataset 1"] == "dataset1"
-            assert server.dataset_cache["quant literature"] == "dataset2"
+            # Test with new DatasetCache API
+            assert server.dataset_cache.get_dataset_id("Test Dataset 1") == "dataset1"
+            assert server.dataset_cache.get_dataset_id("Quant Literature") == "dataset2"
     
     @pytest.mark.asyncio
     async def test_find_dataset_by_name_success(self, server, mock_datasets_response):
@@ -76,8 +78,8 @@ class TestRAGFlowMCPServer:
         with patch.object(server, '_make_request', return_value=mock_datasets_response):
             await server.list_datasets()
             
-            dataset_id = await server.find_dataset_by_name("Non-existent Dataset")
-            assert dataset_id is None
+            with pytest.raises(DatasetNotFoundError):
+                await server.find_dataset_by_name("Non-existent Dataset")
     
     @pytest.mark.asyncio
     async def test_retrieval_query_success(self, server, mock_retrieval_response):
@@ -98,30 +100,29 @@ class TestRAGFlowMCPServer:
         with patch.object(server, '_make_request', return_value=mock_datasets_response):
             # First populate cache
             await server.list_datasets()
-            assert server.dataset_cache["quant literature"] == "dataset2"
+            assert server.dataset_cache.get_dataset_id("Quant Literature") == "dataset2"
             
             # Simulate cache being cleared (the bug)
-            server.dataset_cache = {}
+            server.dataset_cache.clear()
             
-            # Try to find dataset again - should fail
+            # Try to find dataset again - should repopulate cache
             dataset_id = await server.find_dataset_by_name("Quant Literature")
             assert dataset_id == "dataset2"  # Should repopulate cache
     
     @pytest.mark.asyncio
     async def test_empty_cache_error_message(self, server):
         """Test error message when cache is empty."""
-        server.dataset_cache = {}
+        server.dataset_cache.clear()
         
         # Mock empty response
         with patch.object(server, '_make_request', return_value={"code": 0, "data": []}):
-            dataset_id = await server.find_dataset_by_name("Quant Literature")
-            assert dataset_id is None
+            with pytest.raises(DatasetNotFoundError) as exc_info:
+                await server.find_dataset_by_name("Quant Literature")
             
-            # Test error message format
-            available_datasets = list(server.dataset_cache.keys()) if server.dataset_cache else []
-            error_msg = f"Dataset 'Quant Literature' not found. Available datasets: {available_datasets}"
-            expected_error = "Dataset 'Quant Literature' not found. Available datasets: []"
-            assert error_msg == expected_error
+            # Check that the exception contains the expected information
+            assert "Quant Literature" in str(exc_info.value)
+            assert exc_info.value.dataset_name == "Quant Literature"
+            assert exc_info.value.available_datasets == []
     
     @pytest.mark.asyncio
     async def test_cache_preservation_on_empty_response(self, server, mock_datasets_response):
@@ -129,8 +130,9 @@ class TestRAGFlowMCPServer:
         # First populate cache with valid data
         with patch.object(server, '_make_request', return_value=mock_datasets_response):
             await server.list_datasets()
-            assert len(server.dataset_cache) == 3
-            assert server.dataset_cache["quant literature"] == "dataset2"
+            cache_stats = server.dataset_cache.stats()
+            assert cache_stats['size'] == 3
+            assert server.dataset_cache.get_dataset_id("Quant Literature") == "dataset2"
         
         # Now simulate API returning empty data
         empty_response = {"code": 0, "data": []}
@@ -138,8 +140,9 @@ class TestRAGFlowMCPServer:
             await server.list_datasets()
             
             # Cache should still contain the previous data
-            assert len(server.dataset_cache) == 3
-            assert server.dataset_cache["quant literature"] == "dataset2"
+            cache_stats = server.dataset_cache.stats()
+            assert cache_stats['size'] == 3
+            assert server.dataset_cache.get_dataset_id("Quant Literature") == "dataset2"
             
             # Should still be able to find dataset by name
             dataset_id = await server.find_dataset_by_name("Quant Literature")
@@ -223,7 +226,8 @@ class TestErrorHandling:
             # Should handle gracefully
             assert result == malformed_response
             # Cache should remain empty
-            assert not server.dataset_cache
+            cache_stats = server.dataset_cache.stats()
+            assert cache_stats['size'] == 0
 
 
 class TestConfigurationLoading:
@@ -239,10 +243,10 @@ class TestConfigurationLoading:
         import ragflow_claude_mcp.server as server_module
         server_module._ragflow_client = None
         
-        # Mock environment variables
+        # Mock environment variables with longer API key
         mock_getenv.side_effect = lambda key, default=None: {
             'RAGFLOW_BASE_URL': 'http://test:9380',
-            'RAGFLOW_API_KEY': 'test-key'
+            'RAGFLOW_API_KEY': 'test-key-that-is-long-enough-for-validation'
         }.get(key, default)
         
         mock_load_config.return_value = {}
@@ -250,7 +254,7 @@ class TestConfigurationLoading:
         client = get_ragflow_client()
         assert client is not None
         assert client.base_url == 'http://test:9380'
-        assert client.api_key == 'test-key'
+        assert client.api_key == 'test-key-that-is-long-enough-for-validation'
     
     @patch('ragflow_claude_mcp.server.load_config')
     @patch('os.getenv')
@@ -292,7 +296,7 @@ class TestConfigurationLoading:
         mock_getenv.side_effect = lambda key, default=None: default
         mock_load_config.return_value = {}
         
-        with pytest.raises(ValueError, match="RAGFLOW_BASE_URL and RAGFLOW_API_KEY must be set"):
+        with pytest.raises(ConfigurationError, match="RAGFLOW_BASE_URL and RAGFLOW_API_KEY must be set"):
             get_ragflow_client()
     
     @patch('ragflow_claude_mcp.server.load_config')
@@ -305,10 +309,10 @@ class TestConfigurationLoading:
         import ragflow_claude_mcp.server as server_module
         server_module._ragflow_client = None
         
-        # Mock environment variables
+        # Mock environment variables with longer API key
         mock_getenv.side_effect = lambda key, default=None: {
             'RAGFLOW_BASE_URL': 'http://test:9380',
-            'RAGFLOW_API_KEY': 'test-key'
+            'RAGFLOW_API_KEY': 'test-key-that-is-long-enough-for-validation'
         }.get(key, default)
         
         mock_load_config.return_value = {}
@@ -492,8 +496,8 @@ class TestConfigurationFile:
         mock_exists.return_value = True
         mock_json_load.side_effect = json.JSONDecodeError("Invalid JSON", "", 0)
         
-        config = load_config()
-        assert config == {}
+        with pytest.raises(ConfigurationError, match="Invalid JSON in config.json"):
+            load_config()
     
     @patch('builtins.open')
     @patch('os.path.exists')
