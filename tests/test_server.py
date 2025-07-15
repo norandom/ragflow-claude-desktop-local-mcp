@@ -324,137 +324,139 @@ class TestConfigurationLoading:
 class TestOpenRouterConfiguration:
     """Test suite for OpenRouter configuration."""
     
-    @patch('ragflow_claude_mcp.server.load_config')
-    @patch('os.getenv')
-    @patch('dspy.configure')
-    @patch('dspy.LM')
-    def test_dspy_openrouter_configuration(self, mock_lm, mock_configure, mock_getenv, mock_load_config):
-        """Test DSPy configuration with OpenRouter."""
-        from ragflow_claude_mcp.server import RAGFlowMCPServer
-        
-        # Mock environment variables
+    def _setup_base_mocks(self, mock_getenv, mock_load_config):
+        """Helper to setup common mocks for all tests."""
         mock_getenv.side_effect = lambda key, default=None: {
             'RAGFLOW_BASE_URL': 'http://test:9380',
             'RAGFLOW_API_KEY': 'test-key'
         }.get(key, default)
-        
-        # Mock config with OpenRouter
-        mock_load_config.return_value = {
+    
+    def _create_openrouter_config(self):
+        """Helper to create OpenRouter configuration."""
+        return {
             'PROVIDER': 'openrouter',
             'DSPY_MODEL': 'openai/gpt-4o-mini',
             'OPENROUTER_API_KEY': 'openrouter-key',
             'OPENROUTER_SITE_URL': 'https://test.com',
             'OPENROUTER_SITE_NAME': 'Test App'
         }
-        
-        server = RAGFlowMCPServer("http://test:9380", "test-key")
-        
-        # Test the retrieval_with_deepening method to trigger DSPy config
-        import asyncio
-        
-        async def test_deepening():
-            # This should trigger DSPy configuration
-            result = await server.retrieval_with_deepening(
-                dataset_id="test",
-                query="test",
-                deepening_level=1
-            )
-            return result
-        
-        # Mock standard retrieval as fallback
-        with patch.object(server, 'retrieval_query', return_value={"test": "result"}):
-            result = asyncio.run(test_deepening())
-            # Should have deepening metadata added
-            assert "test" in result
-            assert result["test"] == "result"
-            assert "metadata" in result
-            assert "deepening" in result["metadata"]
     
-    @patch('ragflow_claude_mcp.server.load_config')
-    @patch('os.getenv')
-    def test_openrouter_config_validation(self, mock_getenv, mock_load_config):
-        """Test OpenRouter configuration validation."""
-        from ragflow_claude_mcp.server import RAGFlowMCPServer
-        
-        # Mock environment variables
-        mock_getenv.side_effect = lambda key, default=None: {
-            'RAGFLOW_BASE_URL': 'http://test:9380',
-            'RAGFLOW_API_KEY': 'test-key'
-        }.get(key, default)
-        
-        # Mock config with OpenRouter but missing API key
-        mock_load_config.return_value = {
-            'PROVIDER': 'openrouter',
-            'DSPY_MODEL': 'openai/gpt-4o-mini'
-            # Missing OPENROUTER_API_KEY
-        }
-        
-        server = RAGFlowMCPServer("http://test:9380", "test-key")
-        
-        # Test the retrieval_with_deepening method
-        import asyncio
-        
-        async def test_deepening():
-            # This should fall back to standard retrieval due to config error
-            result = await server.retrieval_with_deepening(
-                dataset_id="test",
-                query="test",
-                deepening_level=1
-            )
-            return result
-        
-        # Mock standard retrieval as fallback
-        with patch.object(server, 'retrieval_query', return_value={"fallback": "result"}):
-            result = asyncio.run(test_deepening())
-            # Should have deepening metadata added
-            assert "fallback" in result
-            assert result["fallback"] == "result"
-            assert "metadata" in result
-            assert "deepening" in result["metadata"]
-    
-    @patch('ragflow_claude_mcp.server.load_config')
-    @patch('os.getenv')
-    @patch('dspy.configure')
-    @patch('dspy.LM')
-    def test_dspy_openai_configuration(self, mock_lm, mock_configure, mock_getenv, mock_load_config):
-        """Test DSPy configuration with OpenAI."""
-        from ragflow_claude_mcp.server import RAGFlowMCPServer
-        
-        # Mock environment variables
-        mock_getenv.side_effect = lambda key, default=None: {
-            'RAGFLOW_BASE_URL': 'http://test:9380',
-            'RAGFLOW_API_KEY': 'test-key'
-        }.get(key, default)
-        
-        # Mock config with OpenAI
-        mock_load_config.return_value = {
+    def _create_openai_config(self):
+        """Helper to create OpenAI configuration."""
+        return {
             'PROVIDER': 'openai',
             'DSPY_MODEL': 'openai/gpt-4o-mini',
             'OPENAI_API_KEY': 'openai-key'
         }
-        
-        server = RAGFlowMCPServer("http://test:9380", "test-key")
-        
-        # Test the retrieval_with_deepening method to trigger DSPy config
+    
+    def _create_mock_deepening_result(self):
+        """Helper to create mock deepening result."""
+        return {
+            'results': {"test": "result"},
+            'original_query': 'test',
+            'final_query': 'enhanced test query',
+            'queries_used': ['test', 'enhanced test query'],
+            'deepening_level': 1,
+            'refinement_log': ['refined query']
+        }
+    
+    async def _run_deepening_test(self, server):
+        """Helper to run deepening test."""
+        return await server.retrieval_with_deepening(
+            dataset_id="test",
+            query="test",
+            deepening_level=1
+        )
+    
+    @patch('ragflow_claude_mcp.dspy_deepening.DSPyQueryDeepener.deepen_search')
+    @patch('ragflow_claude_mcp.server.load_config')
+    @patch('os.getenv')
+    @patch('dspy.configure')
+    @patch('dspy.LM')
+    def test_dspy_openrouter_configuration(self, mock_lm, mock_configure, mock_getenv, mock_load_config, mock_deepen_search):
+        """Test DSPy configuration with OpenRouter - should succeed and add metadata."""
+        from ragflow_claude_mcp.server import RAGFlowMCPServer
         import asyncio
         
-        async def test_deepening():
-            # This should trigger DSPy configuration
-            result = await server.retrieval_with_deepening(
-                dataset_id="test",
-                query="test",
-                deepening_level=1
-            )
-            return result
+        # Setup mocks
+        self._setup_base_mocks(mock_getenv, mock_load_config)
+        mock_load_config.return_value = self._create_openrouter_config()
+        mock_deepen_search.return_value = self._create_mock_deepening_result()
         
-        # Mock standard retrieval as fallback
-        with patch.object(server, 'retrieval_query', return_value={"test": "result"}):
-            result = asyncio.run(test_deepening())
-            # Should have deepening metadata added
-            assert "test" in result
-            assert result["test"] == "result"
-            assert "metadata" in result
-            assert "deepening" in result["metadata"]
+        # Test
+        server = RAGFlowMCPServer("http://test:9380", "test-key")
+        result = asyncio.run(self._run_deepening_test(server))
+        
+        # Verify successful deepening with metadata
+        assert "test" in result
+        assert result["test"] == "result"
+        assert "metadata" in result
+        assert "deepening" in result["metadata"]
+    
+    @patch('os.path.exists')
+    @patch('builtins.open', new_callable=mock_open)
+    @patch('json.load')
+    @patch('ragflow_claude_mcp.server.load_config')
+    @patch('os.getenv')
+    def test_openrouter_config_validation(self, mock_getenv, mock_load_config, mock_json_load, mock_open_file, mock_exists):
+        """Test OpenRouter configuration validation - should fail and fallback to standard retrieval."""
+        from ragflow_claude_mcp.server import RAGFlowMCPServer
+        import asyncio
+        
+        # Setup mocks
+        self._setup_base_mocks(mock_getenv, mock_load_config)
+        mock_load_config.return_value = {}  # Server init config (not used for DSPy)
+        
+        # Mock config file reading in retrieval_with_deepening method
+        mock_exists.return_value = True
+        mock_json_load.return_value = {
+            'PROVIDER': 'openrouter',
+            'DSPY_MODEL': 'openai/gpt-4o-mini'
+            # Missing OPENROUTER_API_KEY - should cause config failure
+        }
+        
+        # Test
+        server = RAGFlowMCPServer("http://test:9380", "test-key")
+        
+        with patch.object(server, 'retrieval_query', return_value={"fallback": "result"}):
+            result = asyncio.run(self._run_deepening_test(server))
+            
+            # Verify fallback to standard retrieval (no metadata when DSPy config fails)
+            assert "fallback" in result
+            assert result["fallback"] == "result"
+            assert "metadata" not in result
+    
+    @patch('ragflow_claude_mcp.dspy_deepening.DSPyQueryDeepener.deepen_search')
+    @patch('os.path.exists')
+    @patch('builtins.open', new_callable=mock_open)
+    @patch('json.load')
+    @patch('ragflow_claude_mcp.server.load_config')
+    @patch('os.getenv')
+    @patch('dspy.configure')
+    @patch('dspy.LM')
+    def test_dspy_openai_configuration(self, mock_lm, mock_configure, mock_getenv, mock_load_config, mock_json_load, mock_open_file, mock_exists, mock_deepen_search):
+        """Test DSPy configuration with OpenAI - should succeed and add metadata."""
+        from ragflow_claude_mcp.server import RAGFlowMCPServer
+        import asyncio
+        
+        # Setup mocks
+        self._setup_base_mocks(mock_getenv, mock_load_config)
+        mock_load_config.return_value = {}  # Server init config (not used for DSPy)
+        
+        # Mock config file reading in retrieval_with_deepening method
+        mock_exists.return_value = True
+        mock_json_load.return_value = self._create_openai_config()
+        mock_deepen_search.return_value = self._create_mock_deepening_result()
+        
+        # Test
+        server = RAGFlowMCPServer("http://test:9380", "test-key")
+        result = asyncio.run(self._run_deepening_test(server))
+        
+        # Verify successful deepening with metadata
+        assert "test" in result
+        assert result["test"] == "result"
+        assert "metadata" in result
+        assert "deepening" in result["metadata"]
 
 
 class TestConfigurationFile:
