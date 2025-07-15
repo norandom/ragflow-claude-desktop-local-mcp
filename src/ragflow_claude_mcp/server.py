@@ -40,6 +40,7 @@ class RAGFlowMCPServer:
         }
         self.active_sessions = {}  # dataset_id -> chat_id mapping
         self.dataset_cache = {}  # Cache for dataset list
+        self.cache_last_updated = None  # Track when cache was last updated
         
     async def _make_request(self, method: str, endpoint: str, data: Optional[Dict] = None) -> Dict[str, Any]:
         """Make HTTP request to RAGFlow API"""
@@ -127,16 +128,17 @@ class RAGFlowMCPServer:
                     # Get DSPy model from config or use default
                     dspy_model = config.get('DSPY_MODEL', 'openai/gpt-4o-mini')
                     
-                    # Set OpenAI API key if provided in config
-                    if 'OPENAI_API_KEY' in config:
+                    # Set OpenAI API key if provided in config (preserve existing key)
+                    if 'OPENAI_API_KEY' in config and 'OPENAI_API_KEY' not in os.environ:
                         os.environ['OPENAI_API_KEY'] = config['OPENAI_API_KEY']
+                        logger.debug("Set OpenAI API key from config")
                     
                     # Configure DSPy
                     dspy.configure(lm=dspy.LM(dspy_model))
                     logger.info(f"DSPy configured with model: {dspy_model}")
                     
                 except Exception as e:
-                    logger.warning(f"Failed to configure DSPy LM: {e}. Falling back to standard retrieval.")
+                    logger.error(f"Failed to configure DSPy LM: {e}. Falling back to standard retrieval.")
                     # Fall back to standard retrieval if DSPy configuration fails
                     return await self.retrieval_query(dataset_id, query, **kwargs)
             
@@ -177,12 +179,25 @@ class RAGFlowMCPServer:
         endpoint = "/api/v1/datasets"
         result = await self._make_request("GET", endpoint)
         
-        # Cache datasets for name lookup
+        # Cache datasets for name lookup with proper error handling
         if result.get("code") == 0 and "data" in result:
-            self.dataset_cache = {
-                dataset["name"].lower(): dataset["id"]
-                for dataset in result["data"]
-            }
+            datasets = result["data"]
+            if datasets:
+                self.dataset_cache = {
+                    dataset["name"].lower(): dataset["id"]
+                    for dataset in datasets
+                }
+                self.cache_last_updated = asyncio.get_event_loop().time()
+                logger.info(f"Dataset cache populated with {len(self.dataset_cache)} datasets")
+            else:
+                logger.warning("Dataset list returned empty data array, keeping existing cache")
+                # Don't clear existing cache on empty response - preserve what we have
+        else:
+            logger.error(f"Failed to list datasets: code={result.get('code')}, message={result.get('message', 'Unknown error')}")
+            # Don't clear existing cache on failure, just log the error
+            if not hasattr(self, 'dataset_cache'):
+                self.dataset_cache = {}
+                self.cache_last_updated = None
         
         return result
 
@@ -190,11 +205,20 @@ class RAGFlowMCPServer:
         """Find dataset ID by name (case-insensitive)"""
         # Refresh cache if empty
         if not self.dataset_cache:
-            await self.list_datasets()
+            logger.info("Dataset cache is empty, refreshing...")
+            try:
+                await self.list_datasets()
+            except Exception as e:
+                logger.error(f"Failed to refresh dataset cache: {e}")
+                return None
+        
+        # Log current cache state for debugging
+        logger.debug(f"Looking for dataset '{name}' in cache with {len(self.dataset_cache)} entries")
         
         # Exact match first
         name_lower = name.lower()
         if name_lower in self.dataset_cache:
+            logger.debug(f"Found exact match for '{name}' -> {self.dataset_cache[name_lower]}")
             return self.dataset_cache[name_lower]
         
         # Fuzzy match - find datasets containing the name
@@ -203,7 +227,12 @@ class RAGFlowMCPServer:
             if name_lower in dataset_name or dataset_name in name_lower
         ]
         
-        return matches[0] if matches else None
+        if matches:
+            logger.debug(f"Found fuzzy match for '{name}' -> {matches[0]}")
+            return matches[0]
+        else:
+            logger.warning(f"No dataset found for '{name}'. Available datasets: {list(self.dataset_cache.keys())}")
+            return None
 
     async def upload_documents(self, dataset_id: str, file_paths: List[str]) -> Dict[str, Any]:
         """Upload documents to a dataset"""
@@ -473,9 +502,18 @@ async def handle_call_tool(
             dataset_id = await ragflow_client.find_dataset_by_name(dataset_name)
             
             if not dataset_id:
-                available_datasets = list(ragflow_client.dataset_cache.keys()) if ragflow_client.dataset_cache else []
-                error_msg = f"Dataset '{dataset_name}' not found. Available datasets: {available_datasets}"
-                return [types.TextContent(type="text", text=error_msg)]
+                # Force cache refresh and try again
+                logger.warning(f"Dataset '{dataset_name}' not found in cache, forcing refresh...")
+                try:
+                    await ragflow_client.list_datasets()
+                    dataset_id = await ragflow_client.find_dataset_by_name(dataset_name)
+                except Exception as e:
+                    logger.error(f"Failed to refresh dataset cache: {e}")
+                
+                if not dataset_id:
+                    available_datasets = list(ragflow_client.dataset_cache.keys()) if ragflow_client.dataset_cache else []
+                    error_msg = f"Dataset '{dataset_name}' not found after cache refresh. Available datasets: {available_datasets}"
+                    return [types.TextContent(type="text", text=error_msg)]
             
             # Check if deepening is requested
             deepening_level = arguments.get("deepening_level", 0)
