@@ -461,16 +461,16 @@ class TestConfigurationFile:
     """Test suite for configuration file loading."""
     
     @patch('builtins.open', new_callable=mock_open)
-    @patch('os.path.exists')
-    def test_load_config_file_not_found(self, mock_exists, mock_open_func):
+    def test_load_config_file_not_found(self, mock_open_func):
         """Test load_config when config.json doesn't exist."""
         from ragflow_claude_mcp.server import load_config
         
-        mock_exists.return_value = False
+        # Mock open to raise FileNotFoundError
+        mock_open_func.side_effect = FileNotFoundError()
         
         config = load_config()
         assert config == {}
-        mock_open_func.assert_not_called()
+        mock_open_func.assert_called_once_with('config.json', 'r')
     
     @patch('builtins.open')
     @patch('os.path.exists')
