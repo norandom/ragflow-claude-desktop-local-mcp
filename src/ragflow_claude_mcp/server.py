@@ -46,14 +46,26 @@ logging.basicConfig(level=logging.INFO, stream=sys.stderr)
 logger = logging.getLogger("ragflow-mcp")
 
 class RAGFlowMCPServer:
-    def __init__(self, base_url: str, api_key: str, default_rerank: Optional[str] = None):
+    def __init__(self, base_url: str, api_key: str, default_rerank: Optional[str] = None, 
+                 cf_access_client_id: Optional[str] = None, cf_access_client_secret: Optional[str] = None):
         self.base_url = base_url.rstrip('/')
         self.api_key = api_key
         self.default_rerank = default_rerank
+        self.cf_access_client_id = cf_access_client_id
+        self.cf_access_client_secret = cf_access_client_secret
+        
+        # Build headers
         self.headers = {
             'Authorization': f'Bearer {api_key}',
             'Content-Type': 'application/json'
         }
+        
+        # Add Cloudflare Zero Trust headers if provided
+        if cf_access_client_id and cf_access_client_secret:
+            self.headers['CF-Access-Client-Id'] = cf_access_client_id
+            self.headers['CF-Access-Client-Secret'] = cf_access_client_secret
+            logger.info("Cloudflare Zero Trust authentication enabled")
+        
         self.active_sessions: Dict[str, str] = {}  # dataset_id -> chat_id mapping
         self.dataset_cache = DatasetCache()  # Enhanced cache with TTL
         self._session: Optional[aiohttp.ClientSession] = None  # Reusable session
@@ -617,6 +629,10 @@ def get_ragflow_client() -> RAGFlowMCPServer:
             RAGFLOW_BASE_URL = os.getenv("RAGFLOW_BASE_URL", config.get("RAGFLOW_BASE_URL"))
             RAGFLOW_API_KEY = os.getenv("RAGFLOW_API_KEY", config.get("RAGFLOW_API_KEY"))
             RAGFLOW_DEFAULT_RERANK = config.get("RAGFLOW_DEFAULT_RERANK", "rerank-multilingual-v3.0")
+            
+            # Cloudflare Zero Trust configuration (optional)
+            CF_ACCESS_CLIENT_ID = os.getenv("CF_ACCESS_CLIENT_ID", config.get("CF_ACCESS_CLIENT_ID"))
+            CF_ACCESS_CLIENT_SECRET = os.getenv("CF_ACCESS_CLIENT_SECRET", config.get("CF_ACCESS_CLIENT_SECRET"))
 
             if not RAGFLOW_BASE_URL or not RAGFLOW_API_KEY:
                 raise ConfigurationError(
@@ -631,7 +647,13 @@ def get_ragflow_client() -> RAGFlowMCPServer:
             if len(RAGFLOW_API_KEY.strip()) < 10:
                 raise ConfigurationError("RAGFLOW_API_KEY appears to be invalid (too short)")
 
-            _ragflow_client = RAGFlowMCPServer(RAGFLOW_BASE_URL, RAGFLOW_API_KEY, RAGFLOW_DEFAULT_RERANK)
+            _ragflow_client = RAGFlowMCPServer(
+                RAGFLOW_BASE_URL, 
+                RAGFLOW_API_KEY, 
+                RAGFLOW_DEFAULT_RERANK,
+                CF_ACCESS_CLIENT_ID,
+                CF_ACCESS_CLIENT_SECRET
+            )
             logger.info("RAGFlow client initialized successfully")
             
         except Exception as e:

@@ -15,7 +15,10 @@ class TestRAGFlowMCPServer:
         """Create a RAGFlowMCPServer instance for testing."""
         return RAGFlowMCPServer(
             base_url="http://localhost:9380",
-            api_key="test_token"
+            api_key="test_token",
+            default_rerank=None,
+            cf_access_client_id=None,
+            cf_access_client_secret=None
         )
     
     @pytest.fixture
@@ -157,7 +160,10 @@ class TestDSPyIntegration:
         """Create a RAGFlowMCPServer instance for testing."""
         return RAGFlowMCPServer(
             base_url="http://localhost:9380",
-            api_key="test_token"
+            api_key="test_token",
+            default_rerank=None,
+            cf_access_client_id=None,
+            cf_access_client_secret=None
         )
     
     @pytest.mark.asyncio
@@ -197,6 +203,58 @@ class TestDSPyIntegration:
             assert result == mock_result
 
 
+class TestCloudflareZeroTrust:
+    """Test suite for Cloudflare Zero Trust authentication."""
+    
+    @pytest.fixture
+    def cf_server(self):
+        """Create a RAGFlowMCPServer instance with CF Zero Trust auth."""
+        return RAGFlowMCPServer(
+            base_url="https://ragflow.because-security.com",
+            api_key="test_token",
+            default_rerank=None,
+            cf_access_client_id="dafbcf8e52e4ef6070fd5a784d94c670.access",
+            cf_access_client_secret="d20e9c4daeea482bbd1ce1aeca796e15e32201c39c79e872108b98464bc2bcc3"
+        )
+    
+    @pytest.mark.asyncio
+    async def test_cf_headers_added(self, cf_server):
+        """Test that CF headers are added when credentials are provided."""
+        assert 'CF-Access-Client-Id' in cf_server.headers
+        assert 'CF-Access-Client-Secret' in cf_server.headers
+        assert cf_server.headers['CF-Access-Client-Id'] == "dafbcf8e52e4ef6070fd5a784d94c670.access"
+        assert cf_server.headers['CF-Access-Client-Secret'] == "d20e9c4daeea482bbd1ce1aeca796e15e32201c39c79e872108b98464bc2bcc3"
+    
+    @pytest.mark.asyncio
+    async def test_cf_headers_not_added_without_credentials(self):
+        """Test that CF headers are not added without credentials."""
+        server = RAGFlowMCPServer(
+            base_url="http://localhost:9380",
+            api_key="test_token"
+        )
+        assert 'CF-Access-Client-Id' not in server.headers
+        assert 'CF-Access-Client-Secret' not in server.headers
+    
+    @pytest.mark.asyncio
+    async def test_cf_headers_used_in_requests(self, cf_server):
+        """Test that CF headers are included in actual requests."""
+        mock_response = {"code": 0, "data": []}
+        
+        with patch('aiohttp.ClientSession.request') as mock_request:
+            mock_resp = AsyncMock()
+            mock_resp.json.return_value = mock_response
+            mock_resp.raise_for_status = AsyncMock()
+            mock_request.return_value.__aenter__.return_value = mock_resp
+            
+            await cf_server._make_request("GET", "/test")
+            
+            # Verify headers were passed
+            call_args = mock_request.call_args
+            headers = call_args[1]['headers']
+            assert 'CF-Access-Client-Id' in headers
+            assert 'CF-Access-Client-Secret' in headers
+
+
 class TestErrorHandling:
     """Test suite for error handling."""
     
@@ -205,7 +263,10 @@ class TestErrorHandling:
         """Create a RAGFlowMCPServer instance for testing."""
         return RAGFlowMCPServer(
             base_url="http://localhost:9380",
-            api_key="test_token"
+            api_key="test_token",
+            default_rerank=None,
+            cf_access_client_id=None,
+            cf_access_client_secret=None
         )
     
     @pytest.mark.asyncio

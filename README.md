@@ -45,8 +45,26 @@ This is a persoal-use software, which I create for my own RnD. It's not bug-free
    - `RAGFLOW_BASE_URL`: The URL of your RAGFlow instance (e.g., "http://your-ragflow-server:port").
    - `RAGFLOW_API_KEY`: Your RAGFlow API key.
    - `RAGFLOW_DEFAULT_RERANK`: Default rerank model (default: "rerank-multilingual-v3.0").
+   - `CF_ACCESS_CLIENT_ID`: (Optional) Cloudflare Zero Trust Access Client ID.
+   - `CF_ACCESS_CLIENT_SECRET`: (Optional) Cloudflare Zero Trust Access Client Secret.
    - `DSPY_MODEL`: DSPy language model for query refinement (default: "openai/gpt-4o-mini").
    - `OPENAI_API_KEY`: OpenAI API key (required for DSPy query deepening).
+
+### Cloudflare Zero Trust Configuration (Optional)
+
+If your RAGFlow instance is protected by Cloudflare Zero Trust, you can configure authentication:
+
+1. Obtain your Service Token credentials from your Cloudflare Zero Trust dashboard
+2. Add the following to your `config.json`:
+   ```json
+   {
+     "CF_ACCESS_CLIENT_ID": "your-client-id.access",
+     "CF_ACCESS_CLIENT_SECRET": "your-client-secret",
+     ...
+   }
+   ```
+
+The server will automatically include the necessary `CF-Access-Client-Id` and `CF-Access-Client-Secret` headers in all API requests when these credentials are configured.
 
 ## Claude Desktop Configuration
 
