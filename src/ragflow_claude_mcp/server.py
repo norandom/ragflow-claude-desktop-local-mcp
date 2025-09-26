@@ -869,13 +869,20 @@ async def _handle_retrieval_tool(
 ) -> Dict[str, Any]:
     """Handle retrieval operations with common logic."""
     deepening_level = arguments.get("deepening_level", 0)
-    
+
+    # TODO: Fix reranking feature - currently broken
+    # Force use_rerank to False unless explicitly set to True by user
+    # Some agents may try to set it to True automatically, but we need to prevent this
+    use_rerank_param = arguments.get("use_rerank", False)
+    # Only allow True if explicitly and unambiguously set
+    use_rerank = use_rerank_param is True
+
     retrieval_args = {
         "top_k": arguments.get("top_k", 1024),
         "similarity_threshold": arguments.get("similarity_threshold", 0.2),
         "page": arguments.get("page", 1),
         "page_size": arguments.get("page_size", 10),
-        "use_rerank": arguments.get("use_rerank", False),
+        "use_rerank": use_rerank,
         "document_name": arguments.get("document_name")
     }
     
