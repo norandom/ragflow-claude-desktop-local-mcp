@@ -244,16 +244,18 @@ class TestCloudflareZeroTrust:
         assert 'CF-Access-Client-Secret' in cf_server.headers
         
         # Test making an actual API call to ensure headers are preserved
-        mock_response = {"code": 0, "data": [{"id": "test", "name": "Test Dataset"}]}
-        
+        mock_response = {"code": 0, "data": [{"id": "test", "name": "Test Dataset"}], "total": 1}
+
         with patch.object(cf_server, '_make_request', return_value=mock_response) as mock_request:
             result = await cf_server.list_datasets()
-            
-            # Verify the method was called
-            mock_request.assert_called_once_with("GET", "/api/v1/datasets")
-            
-            # Verify the result
-            assert result == mock_response
+
+            # Verify the method was called with pagination parameters
+            mock_request.assert_called_once_with("GET", "/api/v1/datasets", params={'page': 1, 'page_size': 100})
+
+            # Verify the result contains all datasets
+            assert result["code"] == 0
+            assert "data" in result
+            assert len(result["data"]) == 1
             
         # Verify headers are still intact after the call
         assert cf_server.headers['CF-Access-Client-Id'] == "test-client-id.access"
@@ -285,12 +287,14 @@ class TestErrorHandling:
     async def test_malformed_response_handling(self, server):
         """Test handling of malformed API responses."""
         malformed_response = {"invalid": "response"}
-        
+
         with patch.object(server, '_make_request', return_value=malformed_response):
             result = await server.list_datasets()
-            
-            # Should handle gracefully
-            assert result == malformed_response
+
+            # Should handle gracefully and return normalized empty response
+            assert result["code"] == 0
+            assert result["data"] == []
+            assert result["total"] == 0
             # Cache should remain empty
             cache_stats = server.dataset_cache.stats()
             assert cache_stats['size'] == 0

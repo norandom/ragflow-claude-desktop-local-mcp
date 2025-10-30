@@ -95,20 +95,28 @@ class RAGFlowMCPServer:
             await self._session.close()
             self._session = None
         
-    async def _make_request(self, method: str, endpoint: str, data: Optional[Dict] = None) -> Dict[str, Any]:
-        """Make HTTP request to RAGFlow API with improved error handling."""
+    async def _make_request(self, method: str, endpoint: str, data: Optional[Dict] = None, params: Optional[Dict] = None) -> Dict[str, Any]:
+        """Make HTTP request to RAGFlow API with improved error handling.
+
+        Args:
+            method: HTTP method (GET, POST, etc.)
+            endpoint: API endpoint path
+            data: JSON data for request body (used with POST, PATCH, etc.)
+            params: Query parameters for GET requests
+        """
         url = f"{self.base_url}{endpoint}"
         session = await self._get_session()
-        
+
         try:
             async with session.request(
                 method=method,
                 url=url,
                 headers=self.headers,
-                json=data
+                json=data,
+                params=params
             ) as response:
                 response_text = await response.text()
-                
+
                 if response.status == 200:
                     try:
                         return json.loads(response_text)
@@ -125,7 +133,7 @@ class RAGFlowMCPServer:
                         status_code=response.status,
                         response_text=response_text[:500]
                     )
-                    
+
         except aiohttp.ClientError as e:
             logger.error(f"Connection error to RAGFlow API: {e}")
             raise RAGFlowConnectionError(f"Failed to connect to RAGFlow API: {str(e)}")
@@ -373,40 +381,79 @@ class RAGFlowMCPServer:
             return await self.retrieval_query(dataset_id, query, document_name=document_name, **kwargs)
 
     async def list_datasets(self) -> Dict[str, Any]:
-        """List available datasets/knowledge bases with improved caching."""
+        """List available datasets/knowledge bases with pagination support.
+
+        Fetches all datasets across multiple pages and caches them for name lookup.
+        The API returns 30 datasets per page by default.
+        """
         endpoint = "/api/v1/datasets"
-        
+        all_datasets = []
+        page = 1
+        page_size = 100  # Use larger page size to reduce number of requests
+        total_count = None
+
         try:
-            result = await self._make_request("GET", endpoint)
-            
-            # Validate response structure
-            if not isinstance(result, dict):
-                raise RAGFlowAPIError("Invalid response format from datasets API")
-            
-            # Cache datasets for name lookup with proper error handling
-            if result.get("code") == 0 and "data" in result:
-                datasets = result["data"]
-                if datasets and isinstance(datasets, list):
-                    dataset_mapping = {
-                        dataset["name"]: dataset["id"]
-                        for dataset in datasets
-                        if isinstance(dataset, dict) and "name" in dataset and "id" in dataset
-                    }
-                    
-                    if dataset_mapping:
-                        self.dataset_cache.set_datasets(dataset_mapping)
-                        cache_stats = self.dataset_cache.stats()
-                        logger.info(f"Dataset cache updated with {cache_stats['size']} datasets")
-                    else:
-                        logger.warning("No valid datasets found in API response")
+            # Paginate through all datasets
+            while True:
+                params = {
+                    "page": page,
+                    "page_size": page_size
+                }
+                result = await self._make_request("GET", endpoint, params=params)
+
+                # Validate response structure
+                if not isinstance(result, dict):
+                    raise RAGFlowAPIError("Invalid response format from datasets API")
+
+                if result.get("code") != 0:
+                    error_msg = result.get('message', 'Unknown error')
+                    logger.error(f"Failed to list datasets: code={result.get('code')}, message={error_msg}")
+                    break
+
+                # Get datasets from current page
+                datasets = result.get("data", [])
+                if not isinstance(datasets, list):
+                    logger.warning(f"Invalid data format on page {page}")
+                    break
+
+                # Store total count from first page
+                if total_count is None:
+                    total_count = result.get("total", 0)
+                    logger.info(f"Fetching {total_count} datasets across multiple pages...")
+
+                # Add datasets from this page
+                all_datasets.extend(datasets)
+
+                # Check if we've retrieved all datasets
+                if len(datasets) < page_size or len(all_datasets) >= total_count:
+                    break
+
+                page += 1
+
+            # Cache all datasets for name lookup with proper error handling
+            if all_datasets:
+                dataset_mapping = {
+                    dataset["name"]: dataset["id"]
+                    for dataset in all_datasets
+                    if isinstance(dataset, dict) and "name" in dataset and "id" in dataset
+                }
+
+                if dataset_mapping:
+                    self.dataset_cache.set_datasets(dataset_mapping)
+                    cache_stats = self.dataset_cache.stats()
+                    logger.info(f"Dataset cache updated with {cache_stats['size']} datasets")
                 else:
-                    logger.warning("Dataset list returned empty or invalid data array")
+                    logger.warning("No valid datasets found in API response")
             else:
-                error_msg = result.get('message', 'Unknown error')
-                logger.error(f"Failed to list datasets: code={result.get('code')}, message={error_msg}")
-            
-            return result
-            
+                logger.info("No datasets found in RAGFlow instance")
+
+            # Return result in same format as before, but with all datasets
+            return {
+                "code": 0,
+                "data": all_datasets,
+                "total": len(all_datasets)
+            }
+
         except (RAGFlowAPIError, RAGFlowConnectionError):
             raise
         except Exception as e:
@@ -582,10 +629,71 @@ class RAGFlowMCPServer:
         return {"message": "Upload endpoint available but requires file handling"}
 
     async def list_documents(self, dataset_id: str) -> Dict[str, Any]:
-        """List documents in a dataset with validation."""
+        """List documents in a dataset with pagination support.
+
+        Fetches all documents across multiple pages.
+        The API returns 10 documents per page by default.
+        """
         dataset_id = validate_dataset_id(dataset_id)
         endpoint = f"/api/v1/datasets/{dataset_id}/documents"
-        return await self._make_request("GET", endpoint)
+        all_documents = []
+        page = 1
+        page_size = 100  # Use larger page size to reduce number of requests
+
+        try:
+            # Paginate through all documents
+            while True:
+                params = {
+                    "page": page,
+                    "page_size": page_size
+                }
+                result = await self._make_request("GET", endpoint, params=params)
+
+                # Validate response structure
+                if not isinstance(result, dict):
+                    raise RAGFlowAPIError("Invalid response format from documents API")
+
+                if result.get("code") != 0:
+                    error_msg = result.get('message', 'Unknown error')
+                    logger.error(f"Failed to list documents: code={result.get('code')}, message={error_msg}")
+                    break
+
+                # Get documents from current page
+                data = result.get("data", {})
+                if not isinstance(data, dict):
+                    logger.warning(f"Invalid data format on page {page}")
+                    break
+
+                documents = data.get("docs", [])
+                if not isinstance(documents, list):
+                    logger.warning(f"Invalid docs format on page {page}")
+                    break
+
+                # Add documents from this page
+                all_documents.extend(documents)
+
+                # Check if we've retrieved all documents
+                if len(documents) < page_size:
+                    break
+
+                page += 1
+
+            logger.info(f"Retrieved {len(all_documents)} documents for dataset {dataset_id[:10]}...")
+
+            # Return result in same format as before, but with all documents
+            return {
+                "code": 0,
+                "data": {
+                    "docs": all_documents,
+                    "total": len(all_documents)
+                }
+            }
+
+        except (RAGFlowAPIError, RAGFlowConnectionError):
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error listing documents: {redact_sensitive_data(str(e))}")
+            raise RAGFlowAPIError(f"Failed to list documents: {str(e)}")
 
     async def get_document_chunks(self, dataset_id: str, document_id: str) -> Dict[str, Any]:
         """Get chunks from a specific document with validation."""
