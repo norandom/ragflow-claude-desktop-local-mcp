@@ -3,13 +3,13 @@
 A Model Context Protocol (MCP) server that provides seamless integration between tools like Claude Desktop and RAGFlow's REST API for knowledge base querying and document management.
 It enriches the context of the LLMs. 
 
-This is a persoal-use software, which I create for my own RnD. It's not bug-free, and certainly not high quality code. But it gets the job done. :) 
+This is a personal-use software, which I create for my own RnD. It's not bug-free, and certainly not high quality code. But it gets the job done. :) 
 
 ## Features
 
 - **Direct Document Retrieval**: Access raw document chunks with similarity scores using RAGFlow's retrieval API
 - **DSPy Query Deepening**: Intelligent query refinement using DSPy for iterative search improvement
-~~- **Reranking Support**: Optional reranking for improved result quality (configurable on/off)~~ defect for now, working on it
+- **Reranking Support**: Optional reranking for improved result quality (Currently disabled due to API protocol issues)
 - **Enhanced Result Control**: Default 10 results per query with configurable `page_size` and `similarity_threshold` parameters
 - **Document Filtering**: Limit search results to specific documents within a dataset (supports fuzzy matching)
 - **Dataset Name Lookup**: Query knowledge bases using familiar names instead of cryptic IDs
@@ -184,12 +184,6 @@ Please use the ragflow_retrieval_by_name tool with dataset_name "BASF", document
 
 **Note**: Document names support fuzzy matching - you can use partial names like "annual" to match "annual_report_2023.pdf". When multiple documents match (e.g., "annual" matches both "annual_report_2023.pdf" and "annual_report_2024.pdf"), the system uses the most recent document by default and provides information about all matches in the response metadata for user choice.
 
-### Enhanced Retrieval with Reranking (defect)
-
-```
-Please use the ragflow_retrieval_by_name tool with dataset_name "BASF", query "Analyze BASF's financial performance and business strategy", page_size 15, similarity_threshold 0.15, and use_rerank true for higher quality results.
-```
-
 ### DSPy Query Deepening for Complex Queries
 
 ```
@@ -338,6 +332,7 @@ Please use the ragflow_retrieval_by_name tool with dataset_name "Finance KB", qu
 - `OPENAI_API_KEY`: Required for multilingual DSPy functionality
 
 ### Reranking Support
+- **Status**: Currently unavailable due to an upstream API issue (see Known Issues).
 - **Optional Enhancement**: Reranking disabled by default for speed, enabled via `use_rerank: true`
 - **Server-Side Configuration**: Uses `rerank-multilingual-v3.0` model configured in `config.json`
 - **Quality Improvement**: Typically 10-30% better relevance scores when enabled
