@@ -65,6 +65,46 @@ class TestRAGFlowMCPServer:
             # Test with new DatasetCache API
             assert server.dataset_cache.get_dataset_id("Test Dataset 1") == "dataset1"
             assert server.dataset_cache.get_dataset_id("Quant Literature") == "dataset2"
+
+    @pytest.mark.asyncio
+    async def test_list_datasets_pagination_bug_repro(self, server):
+        """Test reproduction of pagination bug where loop breaks early."""
+        # Scenario:
+        # Page 1: Request 100, Get 30. Total 60.
+        # Current code: len(datasets)=30 < page_size=100 -> Break. (Bug: stops at 30)
+        # Expected behavior: Continue to page 2.
+        
+        mock_responses = [
+            # Page 1
+            {
+                "code": 0,
+                "data": [{"id": f"d{i}", "name": f"Dataset {i}"} for i in range(30)],
+                "total": 60
+            },
+            # Page 2
+            {
+                "code": 0,
+                "data": [{"id": f"d{i}", "name": f"Dataset {i}"} for i in range(30, 60)],
+                "total": 60
+            }
+        ]
+        
+        # Side effect for _make_request
+        async def side_effect(method, endpoint, params=None, **kwargs):
+            page = params.get('page', 1)
+            if page <= len(mock_responses):
+                return mock_responses[page-1]
+            return {"code": 0, "data": [], "total": 60}
+
+        with patch.object(server, '_make_request', side_effect=side_effect) as mock_request:
+            result = await server.list_datasets()
+            
+            # If bug exists, len will be 30. If fixed, len will be 60.
+            assert len(result["data"]) == 60
+            assert result["total"] == 60
+            
+            # Verify pagination calls
+            assert mock_request.call_count >= 2
     
     @pytest.mark.asyncio
     async def test_find_dataset_by_name_success(self, server, mock_datasets_response):

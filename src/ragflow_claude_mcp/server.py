@@ -419,13 +419,22 @@ class RAGFlowMCPServer:
                 # Store total count from first page
                 if total_count is None:
                     total_count = result.get("total", 0)
-                    logger.info(f"Fetching {total_count} datasets across multiple pages...")
+                    if total_count:
+                        logger.info(f"Fetching {total_count} datasets across multiple pages...")
+
+                if not datasets:
+                    break
 
                 # Add datasets from this page
                 all_datasets.extend(datasets)
 
                 # Check if we've retrieved all datasets
-                if len(datasets) < page_size or len(all_datasets) >= total_count:
+                if total_count is not None and len(all_datasets) >= total_count:
+                    break
+                
+                # Safety limit
+                if page > 200:
+                    logger.warning("Reached maximum page limit (200) for datasets listing")
                     break
 
                 page += 1
@@ -639,6 +648,7 @@ class RAGFlowMCPServer:
         all_documents = []
         page = 1
         page_size = 100  # Use larger page size to reduce number of requests
+        total_count = None
 
         try:
             # Paginate through all documents
@@ -668,12 +678,23 @@ class RAGFlowMCPServer:
                 if not isinstance(documents, list):
                     logger.warning(f"Invalid docs format on page {page}")
                     break
+                
+                if total_count is None:
+                    total_count = data.get("total") or result.get("total")
+
+                if not documents:
+                    break
 
                 # Add documents from this page
                 all_documents.extend(documents)
 
                 # Check if we've retrieved all documents
-                if len(documents) < page_size:
+                if total_count is not None and len(all_documents) >= total_count:
+                    break
+                
+                # Safety limit
+                if page > 1000:
+                    logger.warning("Reached maximum page limit (1000) for documents listing")
                     break
 
                 page += 1
