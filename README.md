@@ -89,10 +89,10 @@ Add the following to your Claude Desktop MCP configuration:
 ## Available Tools
 
 ### 1. `ragflow_retrieval_by_name` ⭐ **Recommended**
-Retrieve document chunks by dataset name using the retrieval API. Returns raw chunks with similarity scores.
+Retrieve document chunks by dataset **names** using the retrieval API. Returns raw chunks with similarity scores.
 
 **Parameters:**
-- `dataset_name` (required): Name of the dataset/knowledge base to search (e.g., "BASF")
+- `dataset_names` (required): **List of names** of the datasets/knowledge bases to search (e.g., `["BASF", "Quant Literature"]`)
 - `query` (required): Search query or question
 - `document_name` (optional): Name of document to filter results to specific document (supports partial matching)
 - `top_k` (optional): Number of chunks for vector cosine computation. Defaults to 1024.
@@ -106,7 +106,7 @@ Retrieve document chunks by dataset name using the retrieval API. Returns raw ch
 Retrieve document chunks directly from RAGFlow datasets using the retrieval API. Returns raw chunks with similarity scores.
 
 **Parameters:**
-- `dataset_id` (required): ID of the dataset/knowledge base to search
+- `dataset_ids` (required): **List of IDs** of the datasets/knowledge bases to search (e.g., `["id1", "id2"]`)
 - `query` (required): Search query or question
 - `document_name` (optional): Name of document to filter results to specific document (supports partial matching)
 - `top_k` (optional): Number of chunks for vector cosine computation. Defaults to 1024.
@@ -120,6 +120,14 @@ Retrieve document chunks directly from RAGFlow datasets using the retrieval API.
 List all available knowledge bases in your RAGFlow instance.
 
 **Parameters:** None
+
+### Multi-Knowledge Base Search
+
+You can now search across multiple knowledge bases (datasets) in a single query. When doing so, ensure that the selected knowledge bases use compatible embedding models for optimal retrieval quality.
+
+```
+Please use the ragflow_retrieval_by_name tool with dataset_names ["Finance Reports", "Legal Documents"] and query "Summarize the key financial risks and compliance requirements for new market entry."
+```
 
 ### 4. `ragflow_list_documents`
 List documents within a specific dataset.
