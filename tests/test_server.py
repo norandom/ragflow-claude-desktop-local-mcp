@@ -129,13 +129,33 @@ class TestRAGFlowMCPServer:
         """Test successful retrieval query."""
         with patch.object(server, '_make_request', return_value=mock_retrieval_response):
             result = await server.retrieval_query(
-                dataset_id="test_dataset",
+                dataset_ids=["test_dataset"],
                 query="test query"
             )
             
             assert result["code"] == 0
             assert len(result["data"]["chunks"]) == 2
     
+    @pytest.mark.asyncio
+    async def test_retrieval_query_multiple_datasets(self, server, mock_retrieval_response):
+        """Test successful retrieval query with multiple datasets."""
+        with patch.object(server, '_make_request', return_value=mock_retrieval_response) as mock_request:
+            result = await server.retrieval_query(
+                dataset_ids=["dataset1", "dataset2"],
+                query="test query"
+            )
+            
+            assert result["code"] == 0
+            
+            # Verify that the request was made with the correct payload
+            call_args = mock_request.call_args
+            assert call_args is not None
+            args, kwargs = call_args
+            
+            # Verify payload contains list of dataset IDs
+            request_data = args[2] if len(args) > 2 else kwargs.get('data')
+            assert request_data["dataset_ids"] == ["dataset1", "dataset2"]
+
     @pytest.mark.asyncio
     async def test_dataset_cache_bug_scenario(self, server, mock_datasets_response):
         """Test the dataset cache bug scenario."""
@@ -219,7 +239,7 @@ class TestDSPyIntegration:
         
         with patch.object(server, 'retrieval_query', return_value=mock_result):
             result = await server.retrieval_with_deepening(
-                dataset_id="test_dataset",
+                dataset_ids=["test_dataset"],
                 query="test query",
                 deepening_level=2
             )
@@ -234,7 +254,7 @@ class TestDSPyIntegration:
         
         with patch.object(server, 'retrieval_query', return_value=mock_result):
             result = await server.retrieval_with_deepening(
-                dataset_id="test_dataset",
+                dataset_ids=["test_dataset"],
                 query="test query",
                 deepening_level=2
             )
@@ -477,7 +497,7 @@ class TestOpenRouterConfiguration:
     async def _run_deepening_test(self, server):
         """Helper to run deepening test."""
         return await server.retrieval_with_deepening(
-            dataset_id="test",
+            dataset_ids=["test"],
             query="test",
             deepening_level=1
         )

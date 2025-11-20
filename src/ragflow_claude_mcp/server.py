@@ -21,8 +21,8 @@ from .exceptions import (
     DSPyConfigurationError
 )
 from .validation import (
-    validate_dataset_id, validate_document_id, validate_query,
-    validate_dataset_name, validate_document_name, validate_pagination_params,
+    validate_dataset_id, validate_dataset_ids, validate_document_id, validate_query,
+    validate_dataset_name, validate_dataset_names, validate_document_name, validate_pagination_params,
     validate_similarity_threshold, validate_top_k, validate_deepening_level,
     redact_sensitive_data
 )
@@ -147,7 +147,7 @@ class RAGFlowMCPServer:
 
     async def retrieval_query(
         self, 
-        dataset_id: str, 
+        dataset_ids: List[str], 
         query: str, 
         top_k: int = 1024, 
         similarity_threshold: float = 0.2, 
@@ -159,7 +159,7 @@ class RAGFlowMCPServer:
         """Query RAGFlow using dedicated retrieval endpoint for direct document access
         
         Args:
-            dataset_id: ID of the dataset to search
+            dataset_ids: List of dataset IDs to search
             query: Search query
             top_k: Number of chunks for vector cosine computation
             similarity_threshold: Minimum similarity score (0.0-1.0)
@@ -176,7 +176,7 @@ class RAGFlowMCPServer:
             RAGFlowAPIError: If the API request fails
         """
         # Validate inputs
-        dataset_id = validate_dataset_id(dataset_id)
+        dataset_ids = validate_dataset_ids(dataset_ids)
         query = validate_query(query)
         
         if document_name:
@@ -191,22 +191,27 @@ class RAGFlowMCPServer:
         endpoint = "/api/v1/retrieval"
         data = {
             "question": query,
-            "dataset_ids": [dataset_id],
+            "dataset_ids": dataset_ids,
             "top_k": top_k,
             "similarity_threshold": similarity_threshold,
             "page": page,
             "page_size": page_size
         }
         
-        logger.info(f"Executing retrieval query for dataset {dataset_id[:10]}... with {len(query)} char query")
+        dataset_ids_str = ",".join(dataset_ids)
+        logger.info(f"Executing retrieval query for datasets [{dataset_ids_str[:50]}...] with {len(query)} char query")
         
         # Add document filtering if specified
         document_match_info = None
         if document_name:
-            match_result = await self.find_document_by_name(dataset_id, document_name)
+            # Document filtering is tricky with multiple datasets because document IDs are unique per dataset
+            # but user might be looking for a doc name that exists in one of them.
+            # For simplicity, we'll try to find the document in the FIRST dataset provided.
+            primary_dataset_id = dataset_ids[0]
+            match_result = await self.find_document_by_name(primary_dataset_id, document_name)
             if match_result['status'] == 'single_match':
                 data["document_ids"] = [match_result['document_id']]
-                logger.info(f"Filtering results to document '{match_result['document_name']}' (ID: {match_result['document_id'][:10]}...)")
+                logger.info(f"Filtering results to document '{match_result['document_name']}' (ID: {match_result['document_id'][:10]}...) in dataset {primary_dataset_id[:10]}...")
                 document_match_info = match_result
             elif match_result['status'] == 'multiple_matches':
                 # Use the best match but inform user about alternatives
@@ -214,7 +219,7 @@ class RAGFlowMCPServer:
                 logger.info(f"Multiple documents match '{document_name}'. Using best match: '{match_result['document_name']}' (ID: {match_result['document_id'][:10]}...)")
                 document_match_info = match_result
             else:
-                logger.warning(f"Document '{document_name}' not found in dataset {dataset_id[:10]}..., proceeding without filtering")
+                logger.warning(f"Document '{document_name}' not found in dataset {primary_dataset_id[:10]}..., proceeding without filtering")
                 document_match_info = match_result
         
         # Only use reranking if explicitly enabled
@@ -302,7 +307,7 @@ class RAGFlowMCPServer:
     
     async def retrieval_with_deepening(
         self, 
-        dataset_id: str, 
+        dataset_ids: List[str], 
         query: str, 
         deepening_level: int = 0, 
         document_name: Optional[str] = None, 
@@ -311,7 +316,7 @@ class RAGFlowMCPServer:
         """Enhanced retrieval with optional DSPy query deepening.
         
         Args:
-            dataset_id: The dataset ID to search
+            dataset_ids: The dataset IDs to search
             query: The search query
             deepening_level: Level of DSPy refinement (0-3)
             document_name: Optional document name filter
@@ -321,7 +326,7 @@ class RAGFlowMCPServer:
             Dictionary containing enhanced search results
         """
         # Validate inputs
-        dataset_id = validate_dataset_id(dataset_id)
+        dataset_ids = validate_dataset_ids(dataset_ids)
         query = validate_query(query)
         deepening_level = validate_deepening_level(deepening_level) or 0
         
@@ -332,7 +337,7 @@ class RAGFlowMCPServer:
         if deepening_level <= 0 or not DSPY_AVAILABLE:
             if deepening_level > 0 and not DSPY_AVAILABLE:
                 logger.warning("DSPy deepening requested but not available, falling back to standard retrieval")
-            return await self.retrieval_query(dataset_id, query, document_name=document_name, **kwargs)
+            return await self.retrieval_query(dataset_ids, query, document_name=document_name, **kwargs)
         
         # Use DSPy query deepening
         logger.info(f"Starting DSPy query deepening (level {deepening_level}) for query: '{query[:50]}...'")
@@ -341,14 +346,14 @@ class RAGFlowMCPServer:
             # Configure DSPy if needed
             if not self._configure_dspy_if_needed():
                 logger.warning("DSPy configuration failed, falling back to standard retrieval")
-                return await self.retrieval_query(dataset_id, query, document_name=document_name, **kwargs)
+                return await self.retrieval_query(dataset_ids, query, document_name=document_name, **kwargs)
             
             deepener = get_deepener()
             
             # Perform deepened search
             deepening_result = await deepener.deepen_search(
                 ragflow_client=self,
-                dataset_id=dataset_id,
+                dataset_ids=dataset_ids,
                 original_query=query,
                 deepening_level=deepening_level,
                 **kwargs
@@ -374,11 +379,11 @@ class RAGFlowMCPServer:
         except DSPyConfigurationError as e:
             logger.error(f"DSPy configuration error: {e}")
             logger.info("Falling back to standard retrieval")
-            return await self.retrieval_query(dataset_id, query, document_name=document_name, **kwargs)
+            return await self.retrieval_query(dataset_ids, query, document_name=document_name, **kwargs)
         except Exception as e:
             logger.error(f"DSPy query deepening failed: {redact_sensitive_data(str(e))}")
             logger.info("Falling back to standard retrieval")
-            return await self.retrieval_query(dataset_id, query, document_name=document_name, **kwargs)
+            return await self.retrieval_query(dataset_ids, query, document_name=document_name, **kwargs)
 
     async def list_datasets(self) -> Dict[str, Any]:
         """List available datasets/knowledge bases with pagination support.
@@ -468,6 +473,28 @@ class RAGFlowMCPServer:
         except Exception as e:
             logger.error(f"Unexpected error listing datasets: {redact_sensitive_data(str(e))}")
             raise RAGFlowAPIError(f"Failed to list datasets: {str(e)}")
+
+    async def find_datasets_by_names(self, names: List[str]) -> List[str]:
+        """Find dataset IDs by names (case-insensitive) with validation.
+        
+        Args:
+            names: List of dataset names
+            
+        Returns:
+            List of dataset IDs
+            
+        Raises:
+            DatasetNotFoundError: If any dataset is not found
+        """
+        dataset_ids = []
+        names = validate_dataset_names(names)
+        
+        for name in names:
+            dataset_id = await self.find_dataset_by_name(name)
+            if dataset_id:
+                dataset_ids.append(dataset_id)
+                
+        return dataset_ids
 
     async def find_document_by_name(self, dataset_id: str, document_name: str) -> Dict[str, Any]:
         """Find document ID by name within a dataset with ranking and multiple match handling.
@@ -866,9 +893,10 @@ async def handle_list_tools() -> List[types.Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "dataset_id": {
-                        "type": "string",
-                        "description": "ID of the dataset/knowledge base to search"
+                    "dataset_ids": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of IDs of the datasets/knowledge bases to search"
                     },
                     "query": {
                         "type": "string",
@@ -905,18 +933,19 @@ async def handle_list_tools() -> List[types.Tool]:
                         "maximum": 3
                     }
                 },
-                "required": ["dataset_id", "query"]
+                "required": ["dataset_ids", "query"]
             }
         ),
         types.Tool(
             name="ragflow_retrieval_by_name",
-            description="Retrieve document chunks by dataset name using the retrieval API. Returns raw chunks with similarity scores.",
+            description="Retrieve document chunks by dataset names using the retrieval API. Returns raw chunks with similarity scores.",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "dataset_name": {
-                        "type": "string",
-                        "description": "Name of the dataset/knowledge base to search (e.g., 'BASF')"
+                    "dataset_names": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of names of the datasets/knowledge bases to search (e.g., ['BASF', 'Legal'])"
                     },
                     "query": {
                         "type": "string",
@@ -953,7 +982,7 @@ async def handle_list_tools() -> List[types.Tool]:
                         "maximum": 3
                     }
                 },
-                "required": ["dataset_name", "query"]
+                "required": ["dataset_names", "query"]
             }
         ),
         types.Tool(
@@ -992,7 +1021,7 @@ def _handle_tool_error(e: Exception, tool_name: str) -> List[types.TextContent]:
 
 async def _handle_retrieval_tool(
     ragflow_client: RAGFlowMCPServer,
-    dataset_id: str,
+    dataset_ids: List[str],
     arguments: Dict[str, Any],
     include_dataset_info: bool = False
 ) -> Dict[str, Any]:
@@ -1017,25 +1046,25 @@ async def _handle_retrieval_tool(
     
     if deepening_level > 0:
         result = await ragflow_client.retrieval_with_deepening(
-            dataset_id=dataset_id,
+            dataset_ids=dataset_ids,
             query=arguments["query"],
             deepening_level=deepening_level,
             **retrieval_args
         )
     else:
         result = await ragflow_client.retrieval_query(
-            dataset_id=dataset_id,
+            dataset_ids=dataset_ids,
             query=arguments["query"],
             **retrieval_args
         )
     
     if include_dataset_info:
-        dataset_name = arguments.get("dataset_name", "unknown")
+        dataset_names = arguments.get("dataset_names", [])
         return {
-            "dataset_found": {
-                "name": dataset_name,
-                "id": dataset_id
-            },
+            "datasets_found": [
+                {"name": name, "id": id} 
+                for name, id in zip(dataset_names, dataset_ids)
+            ],
             "retrieval_result": result
         }
     
@@ -1076,22 +1105,22 @@ async def handle_call_tool(
             
         elif name == "ragflow_retrieval":
             result = await _handle_retrieval_tool(
-                ragflow_client, arguments["dataset_id"], arguments, include_dataset_info=False
+                ragflow_client, arguments["dataset_ids"], arguments, include_dataset_info=False
             )
             return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
             
         elif name == "ragflow_retrieval_by_name":
-            dataset_name = arguments["dataset_name"]
+            dataset_names = arguments["dataset_names"]
             try:
-                dataset_id = await ragflow_client.find_dataset_by_name(dataset_name)
+                dataset_ids = await ragflow_client.find_datasets_by_names(dataset_names)
             except DatasetNotFoundError:
                 # Try refreshing cache once
-                logger.info(f"Dataset '{dataset_name}' not found, refreshing cache...")
+                logger.info(f"One or more datasets in '{dataset_names}' not found, refreshing cache...")
                 await ragflow_client.list_datasets()
-                dataset_id = await ragflow_client.find_dataset_by_name(dataset_name)
+                dataset_ids = await ragflow_client.find_datasets_by_names(dataset_names)
             
             result = await _handle_retrieval_tool(
-                ragflow_client, dataset_id, arguments, include_dataset_info=True
+                ragflow_client, dataset_ids, arguments, include_dataset_info=True
             )
             return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
             

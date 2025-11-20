@@ -10,6 +10,50 @@ from typing import Any, Dict, Optional
 from .exceptions import ValidationError
 
 
+def validate_dataset_ids(dataset_ids: list[str]) -> list[str]:
+    """
+    Validate a list of dataset IDs.
+    
+    Args:
+        dataset_ids: List of dataset IDs to validate
+        
+    Returns:
+        The validated list of dataset IDs
+        
+    Raises:
+        ValidationError: If the input is invalid
+    """
+    if not isinstance(dataset_ids, list):
+        raise ValidationError("Dataset IDs must be a list")
+    
+    if not dataset_ids:
+        raise ValidationError("Dataset IDs list cannot be empty")
+        
+    return [validate_dataset_id(id) for id in dataset_ids]
+
+
+def validate_dataset_names(names: list[str]) -> list[str]:
+    """
+    Validate a list of dataset names.
+    
+    Args:
+        names: List of dataset names to validate
+        
+    Returns:
+        The validated list of dataset names
+        
+    Raises:
+        ValidationError: If the input is invalid
+    """
+    if not isinstance(names, list):
+        raise ValidationError("Dataset names must be a list")
+    
+    if not names:
+        raise ValidationError("Dataset names list cannot be empty")
+        
+    return [validate_dataset_name(name) for name in names]
+
+
 def validate_dataset_id(dataset_id: str) -> str:
     """
     Validate dataset ID format.

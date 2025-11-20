@@ -112,7 +112,7 @@ class DSPyQueryDeepener(dspy.Module):
     
     async def deepen_search(self, 
                            ragflow_client, 
-                           dataset_id: str, 
+                           dataset_ids: List[str], 
                            original_query: str, 
                            deepening_level: int = 1,
                            **ragflow_kwargs) -> Dict[str, Any]:
@@ -121,7 +121,7 @@ class DSPyQueryDeepener(dspy.Module):
         
         Args:
             ragflow_client: RAGFlow client instance
-            dataset_id: Dataset ID to search
+            dataset_ids: List of Dataset IDs to search
             original_query: User's original search query
             deepening_level: Number of refinement iterations (1-3)
             **ragflow_kwargs: Additional arguments for RAGFlow search
@@ -133,7 +133,7 @@ class DSPyQueryDeepener(dspy.Module):
         if deepening_level <= 0:
             # No deepening, just return original results
             results = await ragflow_client.retrieval_query(
-                dataset_id=dataset_id,
+                dataset_ids=dataset_ids,
                 query=original_query,
                 **ragflow_kwargs
             )
@@ -154,7 +154,7 @@ class DSPyQueryDeepener(dspy.Module):
         # Step 1: Initial search
         logger.info(f"Starting search deepening for query: '{original_query}'")
         current_results = await ragflow_client.retrieval_query(
-            dataset_id=dataset_id,
+            dataset_ids=dataset_ids,
             query=original_query,
             **ragflow_kwargs
         )
@@ -221,7 +221,7 @@ class DSPyQueryDeepener(dspy.Module):
                 # Execute refined search
                 logger.info(f"Executing refined search: '{refined_query}'")
                 refined_results = await ragflow_client.retrieval_query(
-                    dataset_id=dataset_id,
+                    dataset_ids=dataset_ids,
                     query=refined_query,
                     **ragflow_kwargs
                 )
