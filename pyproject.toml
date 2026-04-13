@@ -8,7 +8,7 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
-    "aiohttp>=3.12.13",
+    "aiohttp>=3.13.5",
     "mcp>=1.10.1",
     "dspy-ai>=2.5.0",
     "dspy",
