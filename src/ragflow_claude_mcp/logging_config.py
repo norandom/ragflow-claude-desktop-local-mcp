@@ -1,9 +1,4 @@
-"""
-Logging configuration for RAGFlow MCP Server.
-
-This module provides structured logging configuration with appropriate
-formatting and levels for better observability and debugging.
-"""
+"""Logging setup. Two formatters: JSON for files/aggregators, plain for the console."""
 
 import logging
 import sys
@@ -13,9 +8,7 @@ from datetime import datetime
 
 
 class StructuredFormatter(logging.Formatter):
-    """
-    Custom formatter that outputs structured JSON logs for better parsing.
-    """
+    """Emits one JSON object per log record."""
     
     def format(self, record: logging.LogRecord) -> str:
         # Create base log entry
@@ -41,9 +34,7 @@ class StructuredFormatter(logging.Formatter):
 
 
 class HumanReadableFormatter(logging.Formatter):
-    """
-    Formatter for human-readable console output.
-    """
+    """Plain text formatter for the console."""
     
     def __init__(self):
         super().__init__(
@@ -81,7 +72,7 @@ def setup_logging(
     else:
         formatter = HumanReadableFormatter()
     
-    # Console handler - use stderr to avoid interfering with MCP protocol on stdout
+    # MCP speaks on stdout, so logs have to go to stderr or they corrupt the protocol
     console_handler = logging.StreamHandler(sys.stderr)
     console_handler.setLevel(numeric_level)
     console_handler.setFormatter(formatter)

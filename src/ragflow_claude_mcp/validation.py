@@ -1,9 +1,4 @@
-"""
-Input validation utilities for RAGFlow MCP Server.
-
-This module provides validation functions to ensure data integrity
-and security for all user inputs and API parameters.
-"""
+"""Input validators for arguments coming in over MCP. Each one raises ValidationError on failure."""
 
 import re
 from typing import Any, Dict, Optional
@@ -130,8 +125,8 @@ def validate_query(query: str) -> str:
     if len(query) > 1000:
         raise ValidationError("Query too long (max 1000 characters)")
     
-    # Remove potentially dangerous characters but keep most punctuation for search
-    # This is a basic sanitization - adjust based on your search requirements
+    # Strip a small set of injection-prone characters; keep most punctuation since
+    # users actually want to search for things like quotes and apostrophes.
     sanitized_query = re.sub(r'[<>&"\'`]', '', query)
     
     return sanitized_query

@@ -1,9 +1,4 @@
-"""
-Custom exceptions for RAGFlow MCP Server.
-
-This module defines specific exception types for better error handling
-and debugging throughout the application.
-"""
+"""Exception types raised by the RAGFlow MCP server."""
 
 from typing import Optional, Dict, Any
 

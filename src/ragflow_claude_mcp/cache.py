@@ -1,8 +1,6 @@
 """
-Cache management utilities for RAGFlow MCP Server.
-
-This module provides caching functionality with TTL (Time To Live)
-and size limits to improve performance and prevent memory leaks.
+TTL + LRU cache used to memoise dataset name → ID lookups.
+Keeps the cache from growing unbounded and drops stale entries on read.
 """
 
 import time
@@ -11,12 +9,7 @@ from .exceptions import CacheError
 
 
 class TTLCache:
-    """
-    A simple cache implementation with TTL and size limits.
-    
-    This cache automatically expires entries after a specified time
-    and enforces a maximum size limit using LRU eviction.
-    """
+    """Cache with per-entry TTL and an LRU size cap."""
     
     def __init__(self, max_size: int = 1000, default_ttl: float = 3600):
         """
@@ -155,9 +148,7 @@ class TTLCache:
 
 
 class DatasetCache:
-    """
-    Specialized cache for dataset information with automatic cleanup.
-    """
+    """Wraps TTLCache for dataset name → ID lookups, with periodic cleanup."""
     
     def __init__(self, ttl: float = 1800):  # 30 minutes default TTL
         """

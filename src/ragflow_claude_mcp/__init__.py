@@ -1,9 +1,7 @@
 """
 RAGFlow Claude MCP Server
 
-A Model Context Protocol server that provides seamless integration between 
-tools like Claude Desktop and RAGFlow's REST API for knowledge base querying 
-and document management.
+MCP server that exposes a RAGFlow instance to Claude Desktop and other MCP clients.
 """
 
 from .server import main, RAGFlowMCPServer

@@ -1,8 +1,7 @@
 """
-DSPy-powered query deepening for RAGFlow search optimization.
-
-This module implements intelligent query refinement using DSPy to improve
-search result quality through iterative query optimization.
+DSPy-driven query refinement loop. Looks at the top results from RAGFlow,
+identifies what the query missed, rewrites it, and re-runs. Repeats up to N
+times depending on `deepening_level`.
 """
 
 import dspy
@@ -53,7 +52,7 @@ class MergeSearchResults(dspy.Signature):
 
 
 class DSPyQueryDeepener(dspy.Module):
-    """DSPy module for iterative query refinement and result optimization"""
+    """Runs the analyse → refine → re-search loop. Optionally merges results at the end."""
     
     def __init__(self):
         super().__init__()
@@ -62,7 +61,7 @@ class DSPyQueryDeepener(dspy.Module):
         self.merger = dspy.ChainOfThought(MergeSearchResults)
         
     def extract_content_summary(self, results: Dict[str, Any]) -> str:
-        """Extract key content from RAGFlow results for analysis"""
+        """Build a snippet summary of the top 5 results to feed back into the analyzer."""
         if not results or not results.get('data'):
             return "No results found"
         
@@ -85,7 +84,7 @@ class DSPyQueryDeepener(dspy.Module):
         return "\n---\n".join(content_snippets)
     
     def extract_key_context(self, results: Dict[str, Any]) -> str:
-        """Extract key themes and context from results"""
+        """Return the first ~500 chars of concatenated top-3 chunks as context for refinement."""
         if not results or not results.get('data'):
             return "No context available"
         
@@ -110,28 +109,28 @@ class DSPyQueryDeepener(dspy.Module):
         
         return context
     
-    async def deepen_search(self, 
-                           ragflow_client, 
-                           dataset_ids: List[str], 
-                           original_query: str, 
+    async def deepen_search(self,
+                           ragflow_client,
+                           dataset_ids: List[str],
+                           original_query: str,
                            deepening_level: int = 1,
                            **ragflow_kwargs) -> Dict[str, Any]:
-        """
-        Perform iterative query deepening to improve search results
-        
+        """Run the refinement loop and return final results plus the process log.
+
         Args:
             ragflow_client: RAGFlow client instance
-            dataset_ids: List of Dataset IDs to search
-            original_query: User's original search query
-            deepening_level: Number of refinement iterations (1-3)
-            **ragflow_kwargs: Additional arguments for RAGFlow search
-            
+            dataset_ids: list of dataset IDs to search across
+            original_query: the user's query
+            deepening_level: how many refinement passes (1-3); 0 returns raw results
+            **ragflow_kwargs: forwarded to retrieval_query
+
         Returns:
-            Dictionary containing refined results and process information
+            Dict with keys: original_query, final_query, queries_used, deepening_level,
+            results, refinement_log, merge_info, all_results.
         """
         
         if deepening_level <= 0:
-            # No deepening, just return original results
+            # Level 0: pass through to standard retrieval, no LLM calls.
             results = await ragflow_client.retrieval_query(
                 dataset_ids=dataset_ids,
                 query=original_query,
@@ -240,7 +239,9 @@ class DSPyQueryDeepener(dspy.Module):
                 # Continue with current results if refinement fails
                 break
         
-        # Merge results if we have multiple iterations
+        # If we ran more than the initial query, ask the merger to summarise.
+        # Right now we still return the last (most refined) result set rather
+        # than a true merged set — see the comment below.
         final_results = current_results
         merge_info = None
         
@@ -263,8 +264,7 @@ class DSPyQueryDeepener(dspy.Module):
                     "summary": merge_analysis.final_result_summary
                 }
                 
-                # For now, use the last (most refined) results
-                # In a more sophisticated implementation, we'd actually merge
+                # TODO: actually merge instead of just returning the last set.
                 final_results = current_results
                 
             except Exception as e:
@@ -286,7 +286,7 @@ class DSPyQueryDeepener(dspy.Module):
         }
     
     def _create_results_summary(self, all_results: List[Dict]) -> str:
-        """Create a summary of all search results for merging analysis"""
+        """One-line per iteration: query, count, average similarity. Fed to the merger."""
         summary_parts = []
         
         for result_set in all_results:
@@ -309,11 +309,11 @@ class DSPyQueryDeepener(dspy.Module):
         return "\n".join(summary_parts)
 
 
-# Global instance for reuse
+# Singleton — cheap, no per-request state worth duplicating.
 _deepener_instance = None
 
 def get_deepener() -> DSPyQueryDeepener:
-    """Get or create a global DSPy query deepener instance"""
+    """Return the process-wide DSPyQueryDeepener (lazily constructed)."""
     global _deepener_instance
     if _deepener_instance is None:
         _deepener_instance = DSPyQueryDeepener()

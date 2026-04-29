@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
-"""
-RAGFlow MCP Server
-A Model Context Protocol server that provides tools to interact with RAGFlow's retrieval API.
-"""
+"""RAGFlow MCP server — exposes RAGFlow's retrieval API as MCP tools."""
 
 import asyncio
 import json
@@ -40,7 +37,7 @@ except ImportError:
 import mcp.server.stdio
 import mcp.types as types
 
-# Configure logging - simple setup to avoid import issues
+# Plain stderr logging. Avoid logging_config here so the import doesn't go circular.
 import sys
 logging.basicConfig(level=logging.INFO, stream=sys.stderr)
 logger = logging.getLogger("ragflow-mcp")
@@ -59,16 +56,16 @@ class RAGFlowMCPServer:
             'Authorization': f'Bearer {api_key}',
             'Content-Type': 'application/json'
         }
-        
-        # Add Cloudflare Zero Trust headers if provided
+
+        # Cloudflare Zero Trust headers when both service-token values are set.
         if cf_access_client_id and cf_access_client_secret:
             self.headers['CF-Access-Client-Id'] = cf_access_client_id
             self.headers['CF-Access-Client-Secret'] = cf_access_client_secret
             logger.info("Cloudflare Zero Trust authentication enabled")
-        
-        self.active_sessions: Dict[str, str] = {}  # dataset_id -> chat_id mapping
-        self.dataset_cache = DatasetCache()  # Enhanced cache with TTL
-        self._session: Optional[aiohttp.ClientSession] = None  # Reusable session
+
+        self.active_sessions: Dict[str, str] = {}  # dataset_id -> chat_id
+        self.dataset_cache = DatasetCache()
+        self._session: Optional[aiohttp.ClientSession] = None  # one shared aiohttp session
         
     async def __aenter__(self):
         """Async context manager entry."""
@@ -78,7 +75,7 @@ class RAGFlowMCPServer:
         """Async context manager exit."""
         await self.close_session()
     async def _get_session(self) -> aiohttp.ClientSession:
-        """Get or create a reusable HTTP session."""
+        """Lazy-create the HTTP session and reuse it across requests."""
         if self._session is None or self._session.closed:
             timeout = aiohttp.ClientTimeout(total=30, connect=10)
             connector = aiohttp.TCPConnector(limit=100, limit_per_host=30)
@@ -96,13 +93,13 @@ class RAGFlowMCPServer:
             self._session = None
         
     async def _make_request(self, method: str, endpoint: str, data: Optional[Dict] = None, params: Optional[Dict] = None) -> Dict[str, Any]:
-        """Make HTTP request to RAGFlow API with improved error handling.
+        """Send a request to the RAGFlow API. Wraps errors as RAGFlow*Error.
 
         Args:
-            method: HTTP method (GET, POST, etc.)
-            endpoint: API endpoint path
-            data: JSON data for request body (used with POST, PATCH, etc.)
-            params: Query parameters for GET requests
+            method: HTTP method
+            endpoint: API path (joined to base_url)
+            data: JSON body for POST/PATCH/etc.
+            params: query string for GET
         """
         url = f"{self.base_url}{endpoint}"
         session = await self._get_session()
@@ -156,24 +153,21 @@ class RAGFlowMCPServer:
         use_rerank: bool = False, 
         document_name: Optional[str] = None
     ) -> Dict[str, Any]:
-        """Query RAGFlow using dedicated retrieval endpoint for direct document access
-        
+        """Hit RAGFlow's /retrieval endpoint directly. Returns raw chunks with similarity scores.
+
         Args:
-            dataset_ids: List of dataset IDs to search
-            query: Search query
-            top_k: Number of chunks for vector cosine computation
-            similarity_threshold: Minimum similarity score (0.0-1.0)
-            page: Page number for pagination
-            page_size: Number of chunks per page
-            use_rerank: Whether to enable reranking. Default False (uses vector similarity only).
-            document_name: Optional document name to filter results to specific document
-            
-        Returns:
-            Dictionary containing search results
-            
+            dataset_ids: list of dataset IDs to search across
+            query: the search query
+            top_k: vector candidate pool size
+            similarity_threshold: 0.0-1.0; chunks below this score are filtered out
+            page: 1-based page number
+            page_size: chunks per page
+            use_rerank: enable reranking (currently broken upstream — see README)
+            document_name: optional document filter (fuzzy match)
+
         Raises:
-            ValidationError: If input parameters are invalid
-            RAGFlowAPIError: If the API request fails
+            ValidationError: input validation failed
+            RAGFlowAPIError: the API call failed
         """
         # Validate inputs
         dataset_ids = validate_dataset_ids(dataset_ids)
@@ -214,7 +208,7 @@ class RAGFlowMCPServer:
                 logger.info(f"Filtering results to document '{match_result['document_name']}' (ID: {match_result['document_id'][:10]}...) in dataset {primary_dataset_id[:10]}...")
                 document_match_info = match_result
             elif match_result['status'] == 'multiple_matches':
-                # Use the best match but inform user about alternatives
+                # Pick the best match; alternatives end up in metadata.
                 data["document_ids"] = [match_result['document_id']]
                 logger.info(f"Multiple documents match '{document_name}'. Using best match: '{match_result['document_name']}' (ID: {match_result['document_id'][:10]}...)")
                 document_match_info = match_result
@@ -222,7 +216,7 @@ class RAGFlowMCPServer:
                 logger.warning(f"Document '{document_name}' not found in dataset {primary_dataset_id[:10]}..., proceeding without filtering")
                 document_match_info = match_result
         
-        # Only use reranking if explicitly enabled
+        # Rerank is opt-in.
         if use_rerank and self.default_rerank:
             data["rerank_id"] = self.default_rerank
         
@@ -247,11 +241,7 @@ class RAGFlowMCPServer:
             raise RAGFlowAPIError(f"Retrieval query failed: {str(e)}")
     
     def _configure_dspy_if_needed(self) -> bool:
-        """Configure DSPy if not already configured.
-        
-        Returns:
-            True if configuration successful, False otherwise
-        """
+        """Set up DSPy's LM if it isn't already. Returns True on success."""
         if hasattr(dspy.settings, 'lm') and dspy.settings.lm is not None:
             return True
             
@@ -313,17 +303,17 @@ class RAGFlowMCPServer:
         document_name: Optional[str] = None, 
         **kwargs
     ) -> Dict[str, Any]:
-        """Enhanced retrieval with optional DSPy query deepening.
-        
+        """Retrieval with optional DSPy refinement loop on top.
+
         Args:
-            dataset_ids: The dataset IDs to search
-            query: The search query
-            deepening_level: Level of DSPy refinement (0-3)
-            document_name: Optional document name filter
-            **kwargs: Additional arguments for retrieval
-            
-        Returns:
-            Dictionary containing enhanced search results
+            dataset_ids: list of dataset IDs to search across
+            query: the search query
+            deepening_level: 0 = standard retrieval, 1-3 = DSPy refinement passes
+            document_name: optional document filter
+            **kwargs: forwarded to retrieval_query
+
+        Returns the standard retrieval result, with `metadata.deepening` populated
+        when refinement ran.
         """
         # Validate inputs
         dataset_ids = validate_dataset_ids(dataset_ids)
@@ -386,10 +376,9 @@ class RAGFlowMCPServer:
             return await self.retrieval_query(dataset_ids, query, document_name=document_name, **kwargs)
 
     async def list_datasets(self) -> Dict[str, Any]:
-        """List available datasets/knowledge bases with pagination support.
+        """List datasets across all pages and refresh the name → ID cache as a side effect.
 
-        Fetches all datasets across multiple pages and caches them for name lookup.
-        The API returns 30 datasets per page by default.
+        Walks the paginated API (~30 entries/page upstream; we ask for 100 to cut requests).
         """
         endpoint = "/api/v1/datasets"
         all_datasets = []
@@ -497,17 +486,14 @@ class RAGFlowMCPServer:
         return dataset_ids
 
     async def find_document_by_name(self, dataset_id: str, document_name: str) -> Dict[str, Any]:
-        """Find document ID by name within a dataset with ranking and multiple match handling.
-        
-        Args:
-            dataset_id: The dataset ID to search in
-            document_name: The document name to find
-            
-        Returns:
-            Dictionary with match status and document information
-            
+        """Look up a document by name in a dataset.
+
+        Returns a dict with `status`: `single_match`, `multiple_matches`, `not_found`,
+        or `error`. When several documents match, all matches are included so the
+        caller can pick a more specific name.
+
         Raises:
-            ValidationError: If inputs are invalid
+            ValidationError: input validation failed
         """
         # Validate inputs
         dataset_id = validate_dataset_id(dataset_id)
@@ -580,54 +566,44 @@ class RAGFlowMCPServer:
             return {'status': 'error', 'matches': []}
     
     def _calculate_match_score(self, doc_name: str, search_term: str, doc: Dict) -> float:
-        """Calculate match score for ranking (higher is better)"""
+        """Score a candidate document name. Higher = better match."""
         score = 0.0
-        
-        # Exact match gets highest score
+
+        # Tiered match strength: exact > prefix > substring > reverse-substring.
         if doc_name == search_term:
             score += 100.0
-        
-        # Starts with search term
         elif doc_name.startswith(search_term):
             score += 50.0
-        
-        # Contains search term
         elif search_term in doc_name:
             score += 30.0
-        
-        # Search term contains document name (partial match)
         elif doc_name in search_term:
             score += 20.0
-        
-        # Prefer more recent documents (bonus for newer update times)
+
+        # Tiny bias toward documents that have an update_time at all.
         update_time = doc.get('update_time', '')
         if update_time:
             try:
-                # Assume update_time is a timestamp or ISO string
-                # Add small bonus for more recent files
                 score += 0.1
             except (ValueError, TypeError):
-                # Ignore invalid timestamp formats
                 logger.debug(f"Invalid update_time format: {update_time}")
-                
-        # Prefer documents with certain keywords in name
+
+        # Bias toward names that look recent.
         if any(keyword in doc_name for keyword in ['2024', '2023', 'latest', 'current', 'new']):
             score += 5.0
             
         return score
 
     async def find_dataset_by_name(self, name: str) -> Optional[str]:
-        """Find dataset ID by name (case-insensitive) with validation."""
-        # Validate input
+        """Resolve a dataset name to its ID. Case-insensitive, with a fuzzy fallback."""
         name = validate_dataset_name(name)
-        
-        # Try to get from cache first
+
+        # Cache hit is the common path.
         dataset_id = self.dataset_cache.get_dataset_id(name)
         if dataset_id:
             logger.debug(f"Found dataset '{name}' in cache")
             return dataset_id
-        
-        # Cache miss - refresh and try again
+
+        # Cache miss: refresh once and retry.
         logger.info(f"Dataset '{name}' not found in cache, refreshing...")
         try:
             await self.list_datasets()
@@ -638,11 +614,10 @@ class RAGFlowMCPServer:
         except Exception as e:
             logger.error(f"Failed to refresh dataset cache: {redact_sensitive_data(str(e))}")
         
-        # Final attempt with fuzzy matching
+        # Last try: fuzzy match against whatever names we know about.
         available_names = self.dataset_cache.get_all_names()
         name_lower = name.lower()
-        
-        # Fuzzy match - find datasets containing the name
+
         matches = [
             available_name for available_name in available_names
             if name_lower in available_name or available_name in name_lower
@@ -659,16 +634,14 @@ class RAGFlowMCPServer:
         raise DatasetNotFoundError(name, available_names)
 
     async def upload_documents(self, dataset_id: str, file_paths: List[str]) -> Dict[str, Any]:
-        """Upload documents to a dataset"""
+        """Stub. Real upload needs multipart/form-data; not wired up over MCP yet."""
         endpoint = f"/api/v1/datasets/{dataset_id}/documents"
-        # Note: This requires multipart/form-data, simplified for MCP
         return {"message": "Upload endpoint available but requires file handling"}
 
     async def list_documents(self, dataset_id: str) -> Dict[str, Any]:
-        """List documents in a dataset with pagination support.
+        """List documents in a dataset, walking through all pages.
 
-        Fetches all documents across multiple pages.
-        The API returns 10 documents per page by default.
+        Upstream defaults to 10 per page; we ask for 100 to cut request count.
         """
         dataset_id = validate_dataset_id(dataset_id)
         endpoint = f"/api/v1/datasets/{dataset_id}/documents"
@@ -744,7 +717,7 @@ class RAGFlowMCPServer:
             raise RAGFlowAPIError(f"Failed to list documents: {str(e)}")
 
     async def get_document_chunks(self, dataset_id: str, document_id: str) -> Dict[str, Any]:
-        """Get chunks from a specific document with validation."""
+        """Get chunks for a single document."""
         dataset_id = validate_dataset_id(dataset_id)
         document_id = validate_document_id(document_id)
         endpoint = f"/api/v1/datasets/{dataset_id}/documents/{document_id}/chunks"
@@ -755,7 +728,7 @@ server = Server("ragflow-mcp")
 
 # Load configuration from config.json
 def load_config() -> Dict[str, Any]:
-    """Load configuration from config.json with validation."""
+    """Load config.json from the cwd. Missing file is fine; bad JSON is fatal."""
     try:
         with open("config.json", "r") as f:
             config = json.load(f)
@@ -775,13 +748,13 @@ def load_config() -> Dict[str, Any]:
         raise ConfigurationError(f"Failed to load configuration: {e}")
 
 def get_ragflow_client() -> RAGFlowMCPServer:
-    """Get or create the RAGFlow client instance with proper configuration validation."""
+    """Lazy singleton. Reads config from env first, falls back to config.json."""
     global _ragflow_client
     if _ragflow_client is None:
         try:
             config = load_config()
-            
-            # RAGFlow configuration with validation
+
+            # Env overrides config file.
             RAGFLOW_BASE_URL = os.getenv("RAGFLOW_BASE_URL", config.get("RAGFLOW_BASE_URL"))
             RAGFLOW_API_KEY = os.getenv("RAGFLOW_API_KEY", config.get("RAGFLOW_API_KEY"))
             RAGFLOW_DEFAULT_RERANK = config.get("RAGFLOW_DEFAULT_RERANK", "rerank-multilingual-v3.0")
@@ -794,12 +767,11 @@ def get_ragflow_client() -> RAGFlowMCPServer:
                 raise ConfigurationError(
                     "RAGFLOW_BASE_URL and RAGFLOW_API_KEY must be set in config.json or environment variables"
                 )
-            
-            # Validate URL format
+
             if not RAGFLOW_BASE_URL.startswith(('http://', 'https://')):
                 raise ConfigurationError("RAGFLOW_BASE_URL must start with http:// or https://")
-            
-            # Validate API key format (basic check)
+
+            # Cheap sanity check — we don't actually know the real API key format.
             if len(RAGFLOW_API_KEY.strip()) < 10:
                 raise ConfigurationError("RAGFLOW_API_KEY appears to be invalid (too short)")
 
@@ -1002,7 +974,7 @@ async def handle_list_tools() -> List[types.Tool]:
     ]
 
 def _handle_tool_error(e: Exception, tool_name: str) -> List[types.TextContent]:
-    """Handle tool execution errors with appropriate logging and response."""
+    """Map exceptions to MCP TextContent error responses, with severity-aware logging."""
     if isinstance(e, ValidationError):
         logger.warning(f"Validation error in {tool_name}: {e}")
         return [types.TextContent(type="text", text=f"Validation Error: {str(e)}")]
@@ -1025,7 +997,7 @@ async def _handle_retrieval_tool(
     arguments: Dict[str, Any],
     include_dataset_info: bool = False
 ) -> Dict[str, Any]:
-    """Handle retrieval operations with common logic."""
+    """Shared body for the retrieval and retrieval_by_name tool handlers."""
     deepening_level = arguments.get("deepening_level", 0)
 
     # TODO: Fix reranking feature - currently broken
@@ -1074,7 +1046,7 @@ async def _handle_retrieval_tool(
 async def handle_call_tool(
     name: str, arguments: Dict[str, Any]
 ) -> List[types.TextContent]:
-    """Handle tool calls with improved error handling and organization."""
+    """MCP tool dispatcher. Routes by name and converts exceptions to error TextContent."""
     try:
         ragflow_client = get_ragflow_client()
         
@@ -1161,8 +1133,7 @@ async def handle_call_tool(
         return _handle_tool_error(e, name)
 
 def main():
-    """Run the MCP server with proper cleanup."""
-    # Log DSPy availability
+    """Entry point. Runs the MCP server and tears down the HTTP session on exit."""
     if not DSPY_AVAILABLE:
         logger.warning("DSPy not available - query deepening will be disabled")
     
@@ -1182,7 +1153,6 @@ def main():
                     )
                 )
         finally:
-            # Cleanup resources
             global _ragflow_client
             if _ragflow_client:
                 await _ragflow_client.close_session()

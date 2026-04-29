@@ -1,188 +1,89 @@
 # Contributing to RAGFlow Claude MCP Server
 
-Thank you for your interest in contributing! This document provides guidelines and instructions for contributing to this project.
+Thanks for the interest. A few notes before you open a PR.
 
-## 🚨 Important: Protected Main Branch
+## Protected main branch
 
-The `main` branch is protected and requires pull requests for all changes. Direct pushes to `main` are not allowed.
+`main` is protected. Direct pushes are rejected — open a PR instead.
 
-## Getting Started
+## Getting set up
 
-1. **Fork the Repository**
-   - Click the "Fork" button on GitHub to create your own copy
-
-2. **Clone Your Fork**
+1. Fork on GitHub and clone your fork:
    ```bash
    git clone https://github.com/YOUR_USERNAME/ragflow-claude-desktop-local-mcp.git
    cd ragflow-claude-desktop-local-mcp
    ```
 
-3. **Add Upstream Remote**
+2. Add the upstream remote:
    ```bash
    git remote add upstream https://github.com/norandom/ragflow-claude-desktop-local-mcp.git
    ```
 
-4. **Set Up Commit Signing** (Required)
+3. Set up commit signing. SSH-signed commits are required:
    ```bash
-   # Configure SSH signing
    git config --global gpg.format ssh
    git config --global user.signingkey ~/.ssh/id_ed25519.pub
    git config --global commit.gpgsign true
    ```
-   
-   For detailed setup instructions, see [Commit Signing Guide](COMMIT_SIGNING.md).
+   See [COMMIT_SIGNING.md](COMMIT_SIGNING.md) if you need the longer walkthrough.
 
-## Development Workflow
-
-### 1. Create a Feature Branch
-
-Always create a new branch for your work:
+## Working on a change
 
 ```bash
-# Update your main branch first
 git checkout main
 git pull upstream main
-
-# Create and switch to a new branch
 git checkout -b feature/your-feature-name
-# or
-git checkout -b fix/issue-description
 ```
 
-### 2. Make Your Changes
+Commit messages follow the conventional-commit prefixes I happen to use:
+`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`. Not strictly enforced, but it keeps the log readable.
 
-- Write clear, concise commit messages
-- Follow the existing code style
-- Update documentation as needed
-- Add tests if applicable
+Push to your fork and open a PR against `main`.
 
-### 3. Commit Your Changes
+## Pull request requirements
 
-```bash
-git add .
-git commit -m "feat: add new feature X"
-# or
-git commit -m "fix: resolve issue with Y"
-```
+- All commits must be SSH-signed. Unsigned commits get rejected.
+- TruffleHog scans every PR. Don't include API keys, tokens, passwords, or private URLs.
+- Describe what the PR does, why, and what you tested.
+- Update docs if you add or change a feature.
 
-Follow conventional commit format:
-- `feat:` for new features
-- `fix:` for bug fixes
-- `docs:` for documentation changes
-- `refactor:` for code refactoring
-- `test:` for test additions/changes
-- `chore:` for maintenance tasks
-
-### 4. Push to Your Fork
-
-```bash
-git push origin feature/your-feature-name
-```
-
-### 5. Create a Pull Request
-
-1. Go to your fork on GitHub
-2. Click "Pull Request" 
-3. Ensure the base repository is `norandom/ragflow-claude-desktop-local-mcp` and base branch is `main`
-4. Provide a clear title and description
-5. Link any related issues
-
-## Pull Request Guidelines
-
-### PR Requirements
-
-- ✅ **Signed Commits**: All commits MUST be signed with SSH keys
-  - Configure signing before making commits
-  - See [Commit Signing Guide](COMMIT_SIGNING.md) for setup
-  - Unsigned commits will be rejected
-
-- ✅ **No Secrets**: All PRs are automatically scanned by TruffleHog. Do not include:
-  - API keys
-  - Tokens
-  - Passwords
-  - Private URLs
-  - Any sensitive information
-
-- ✅ **Clear Description**: Include:
-  - What the PR does
-  - Why it's needed
-  - Any breaking changes
-  - Testing performed
-
-- ✅ **Documentation**: Update relevant docs for new features
-
-- ✅ **Code Quality**: Ensure your code:
-  - Follows Python best practices
-  - Is properly formatted
-  - Has meaningful variable/function names
-  - Includes comments for complex logic
-
-### PR Template
-
-When creating a PR, use this template:
+A simple PR description like this is fine:
 
 ```markdown
-## Description
-Brief description of what this PR does
+## What
+Brief description of what this PR does.
 
-## Type of Change
-- [ ] Bug fix
-- [ ] New feature
-- [ ] Breaking change
-- [ ] Documentation update
+## Why
+Why it's needed.
 
-## Testing
-- [ ] I have tested this locally
-- [ ] I have added tests (if applicable)
-
-## Checklist
-- [ ] My code follows the project style
-- [ ] I have updated documentation
-- [ ] I have checked for exposed secrets
-- [ ] I have tested my changes
+## Tested
+- [ ] Locally
+- [ ] Added/updated tests
 ```
 
-## Security
+## Secrets
 
-### Handling Secrets
+If you accidentally commit a secret:
 
-Never commit secrets to the repository. If you accidentally commit a secret:
+1. Don't push.
+2. Remove the secret from the code.
+3. Amend the commit (`git commit --amend`).
+4. If it's already pushed, ping the maintainers — rotating the secret matters more than the git history at that point.
 
-1. **Do NOT** push the commit
-2. Remove the secret from your code
-3. Use `git commit --amend` to update the commit
-4. If already pushed, notify maintainers immediately
+For security vulnerabilities, email the maintainers rather than filing a public issue.
 
-### Reporting Security Issues
+## Code style
 
-For security vulnerabilities, please email the maintainers directly rather than creating a public issue.
-
-## Code Style
-
-- Use Python 3.8+ features appropriately
-- Follow PEP 8 guidelines
-- Use type hints where beneficial
-- Keep functions focused and single-purpose
-- Add docstrings to functions and classes
+Python 3.8+, PEP 8, type hints where they help. Keep functions focused. Add a docstring when the function is non-obvious.
 
 ## Testing
 
-Before submitting a PR:
+Before opening the PR: run the tests, confirm the MCP server still starts, and check that the feature you touched still works end to end.
 
-1. Test your changes locally
-2. Ensure existing functionality still works
-3. Add tests for new features if applicable
-4. Verify the MCP server starts correctly
+## Questions
 
-## Questions or Issues?
-
-- Check existing issues first
-- Create a new issue for bugs or feature requests
-- Join discussions in existing issues
-- Be respectful and constructive
+Search existing issues first, then file a new one if needed.
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the same license as the project.
-
-Thank you for contributing! 🎉
+By contributing, you agree your contribution is licensed under the same license as the project.

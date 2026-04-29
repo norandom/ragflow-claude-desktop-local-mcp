@@ -1,211 +1,137 @@
-# Commit Signing with SSH Keys
+# Commit signing with SSH keys
 
-This guide explains how to set up and use SSH key signing for Git commits in this repository.
+How to sign Git commits with an SSH key for this repo.
 
-## Why Sign Commits?
+## Why
 
-Signing commits provides:
-- **Authentication**: Proves that commits actually came from you
-- **Integrity**: Ensures commits haven't been tampered with
-- **Trust**: Builds confidence in the codebase's authenticity
+Signed commits prove the commit really came from you and that nobody altered it after the fact. GitHub then shows a "Verified" badge next to it. That's the whole story.
 
 ## Prerequisites
 
-- Git version 2.34 or later (check with `git --version`)
-- An existing SSH key (or create one following the steps below)
-- A GitHub account with your SSH key added
+- Git 2.34 or newer (`git --version`)
+- An SSH key (or generate one — see below)
+- A GitHub account with that key added
 
-## Setup Instructions
+## Setup
 
-### 1. Check Git Version
+### 1. Check your Git version
 
-SSH commit signing requires Git 2.34 or later:
+SSH commit signing needs Git 2.34+:
 
 ```bash
 git --version
 ```
 
-If your version is older, update Git first.
+If you're older than that, update first.
 
-### 2. Generate an SSH Key (if needed)
-
-If you don't have an SSH key, create one:
+### 2. Generate an SSH key (if you don't have one)
 
 ```bash
 ssh-keygen -t ed25519 -C "your_email@example.com"
 ```
 
-For legacy systems that don't support Ed25519:
+For older systems without Ed25519 support:
 ```bash
 ssh-keygen -t rsa -b 4096 -C "your_email@example.com"
 ```
 
-### 3. Add SSH Key to SSH Agent
+### 3. Add the key to your SSH agent
 
 ```bash
-# Start the ssh-agent
 eval "$(ssh-agent -s)"
-
-# Add your SSH private key
-ssh-add ~/.ssh/id_ed25519
-# or for RSA
-ssh-add ~/.ssh/id_rsa
+ssh-add ~/.ssh/id_ed25519   # or ~/.ssh/id_rsa
 ```
 
-### 4. Add SSH Key to GitHub
-
-1. Copy your public key:
-   ```bash
-   cat ~/.ssh/id_ed25519.pub
-   # or for RSA
-   cat ~/.ssh/id_rsa.pub
-   ```
-
-2. Go to GitHub → Settings → SSH and GPG keys
-3. Click "New SSH key"
-4. Choose "Authentication Key" or "Signing Key" (or add it twice for both)
-5. Paste your public key and save
-
-### 5. Configure Git for SSH Signing
-
-Set up Git to use SSH for commit signing:
+### 4. Add the public key to GitHub
 
 ```bash
-# Tell Git to use SSH for signing
+cat ~/.ssh/id_ed25519.pub   # or id_rsa.pub
+```
+
+On GitHub: Settings → SSH and GPG keys → New SSH key. Pick "Signing Key" (or add the same key twice, once for auth and once for signing). Paste, save.
+
+### 5. Configure Git to sign with SSH
+
+```bash
 git config --global gpg.format ssh
-
-# Specify which SSH key to use for signing
 git config --global user.signingkey ~/.ssh/id_ed25519.pub
-# or for RSA
-git config --global user.signingkey ~/.ssh/id_rsa.pub
-
-# Enable commit signing by default (optional but recommended)
 git config --global commit.gpgsign true
-
-# Enable tag signing by default (optional)
-git config --global tag.gpgsign true
+git config --global tag.gpgsign true   # optional
 ```
 
-### 6. Create Allowed Signers File
+### 6. Allowed-signers file
 
-Git needs to know which SSH keys to trust. Create an allowed signers file:
+Git also needs a list of keys it trusts when verifying signatures locally:
 
 ```bash
-# Create the file
 touch ~/.ssh/allowed_signers
-
-# Add your key to the file
 echo "$(git config --get user.email) $(cat ~/.ssh/id_ed25519.pub)" >> ~/.ssh/allowed_signers
-# or for RSA
-echo "$(git config --get user.email) $(cat ~/.ssh/id_rsa.pub)" >> ~/.ssh/allowed_signers
-
-# Tell Git where to find the file
 git config --global gpg.ssh.allowedSignersFile ~/.ssh/allowed_signers
 ```
 
 ## Usage
 
-### Signing Individual Commits
-
-If you didn't enable signing by default, sign individual commits with:
+If you skipped `commit.gpgsign true`, sign individual commits with `-S`:
 
 ```bash
 git commit -S -m "Your commit message"
 ```
 
-### Verifying Signatures
-
-To verify commit signatures:
+To check signatures locally:
 
 ```bash
-# Show signature for the last commit
 git log --show-signature -1
-
-# Verify all commits in a range
-git log --show-signature main..feature-branch
-
-# Show commits with signature status
 git log --pretty="format:%h %G? %aN  %s" -10
 ```
 
-Signature status codes:
-- `G`: Good (valid signature)
-- `B`: Bad signature
-- `U`: Good signature with unknown validity
-- `X`: Good signature that has expired
-- `Y`: Good signature made by an expired key
-- `R`: Good signature made by a revoked key
-- `E`: Signature cannot be checked (missing key)
-- `N`: No signature
+The `%G?` codes:
+- `G` — good signature
+- `B` — bad signature
+- `U` — good but unknown validity
+- `X` — expired signature
+- `Y` — expired key
+- `R` — revoked key
+- `E` — can't verify (missing key)
+- `N` — unsigned
 
-### Viewing Signatures on GitHub
-
-GitHub automatically displays the signature status for all commits once your SSH public key is uploaded to your account:
-
-- **Verified** badge: Commit is signed with a key associated with your GitHub account
-- **Unverified**: Commit is signed but the key isn't associated with your account
-- No badge: Commit is not signed
-
-To enable this:
-1. Add your SSH public key to GitHub (Settings → SSH and GPG keys)
-2. Make sure to add it as a "Signing Key" (or add it for both authentication and signing)
-3. GitHub will automatically verify all past and future commits signed with that key
+GitHub shows "Verified" automatically once your signing key is on your account.
 
 ## Troubleshooting
 
-### "Error: unsupported value for gpg.format"
+**`Error: unsupported value for gpg.format`** — Git is too old; upgrade to 2.34+.
 
-Your Git version is too old. Update to Git 2.34 or later.
-
-### "Error: user.signingkey needs to be set"
-
-You haven't configured which SSH key to use:
+**`Error: user.signingkey needs to be set`** — set it:
 ```bash
 git config --global user.signingkey ~/.ssh/id_ed25519.pub
 ```
 
-### Commits Not Showing as Verified on GitHub
+**Commits show as unverified on GitHub** — make sure (a) the key is uploaded as a *signing* key, (b) `git config --get user.email` matches your GitHub email, (c) the key path in your Git config matches the public key on GitHub.
 
-1. Ensure your SSH key is added to GitHub as a signing key
-2. Check that your Git email matches the one associated with your GitHub account:
-   ```bash
-   git config --get user.email
-   ```
-3. Make sure the SSH key in your Git config matches the one on GitHub
-
-### Permission Denied When Signing
-
-Ensure your SSH key is added to the SSH agent:
+**Permission denied when signing** — your key isn't loaded into the agent:
 ```bash
-ssh-add -l  # List loaded keys
-ssh-add ~/.ssh/id_ed25519  # Add your key if not listed
+ssh-add -l
+ssh-add ~/.ssh/id_ed25519
 ```
 
-## Repository-Specific Configuration
+## Per-repo override
 
-To require signed commits for this repository only:
+To require signing only for this repo:
 
 ```bash
-# Navigate to the repository
 cd /path/to/ragflow-claude-desktop-local-mcp
-
-# Set repository-specific signing
 git config commit.gpgsign true
 git config gpg.format ssh
 git config user.signingkey ~/.ssh/id_ed25519.pub
 ```
 
-## Additional Security
+## Other things worth doing
 
-For maximum security, consider:
+- Keep a separate signing-only key if you want to scope blast radius.
+- A hardware key (YubiKey etc.) is nice if you're already using one.
+- Back up your private key somewhere safe.
 
-1. **Using a dedicated signing key**: Create a separate SSH key just for signing
-2. **Hardware keys**: Use a hardware security key that supports SSH (like YubiKey)
-3. **Key rotation**: Periodically rotate your signing keys
-4. **Backup**: Keep secure backups of your private keys
+## Links
 
-## Resources
-
-- [GitHub's SSH Commit Signing Documentation](https://docs.github.com/en/authentication/managing-commit-signature-verification/about-commit-signature-verification)
-- [Git's Official Signing Documentation](https://git-scm.com/book/en/v2/Git-Tools-Signing-Your-Work)
-- [SSH Key Generation Guide](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent)
+- [GitHub: SSH commit signing](https://docs.github.com/en/authentication/managing-commit-signature-verification/about-commit-signature-verification)
+- [Git: signing your work](https://git-scm.com/book/en/v2/Git-Tools-Signing-Your-Work)
+- [GitHub: generating an SSH key](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent)
