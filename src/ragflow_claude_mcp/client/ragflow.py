@@ -25,10 +25,12 @@ from ..common.validation import (
     redact_sensitive_data,
 )
 from ..common.cache import DatasetCache
+from ..common import flags
 
 # DSPy is optional. If it's not installed, retrieval_with_deepening falls back
-# to standard retrieval. The actual `DSPY_AVAILABLE` flag lives on the server
-# module so tests can patch it there; we read it lazily inside the method.
+# to standard retrieval. The DSPY_AVAILABLE flag lives in common.flags so it can
+# be patched live by tests (we read flags.DSPY_AVAILABLE rather than capturing
+# the value at import time).
 try:
     import dspy
     from ..dspy.deepening import get_deepener
@@ -235,38 +237,53 @@ class RAGFlowMCPServer:
             return True
 
         try:
-            # config.json sits at the project root, three levels up from this file.
-            config_path = os.path.expanduser(
-                os.path.join(os.path.dirname(__file__), '..', '..', '..', 'config.json')
-            )
+            # Load config from RAGFLOW_CONFIG_PATH (or ./config.json relative
+            # to cwd, or the legacy project-root location three levels up
+            # from this file — kept for backwards compatibility with the
+            # source-checkout install method).
             config = {}
+            candidate_paths = [
+                os.getenv("RAGFLOW_CONFIG_PATH"),
+                "config.json",
+                os.path.expanduser(
+                    os.path.join(os.path.dirname(__file__), '..', '..', '..', 'config.json')
+                ),
+            ]
+            for candidate in candidate_paths:
+                if candidate and os.path.exists(candidate):
+                    with open(candidate, 'r') as f:
+                        config = json.load(f)
+                    break
 
-            if os.path.exists(config_path):
-                with open(config_path, 'r') as f:
-                    config = json.load(f)
+            def _setting(key: str, default=None):
+                """Env var takes precedence over file config."""
+                return os.getenv(key, config.get(key, default))
 
-            dspy_model = config.get('DSPY_MODEL', 'openai/gpt-4o-mini')
+            dspy_model = _setting('DSPY_MODEL', 'openai/gpt-4o-mini')
 
             lm_kwargs = {}
-            provider = config.get('PROVIDER', 'openai').lower()
+            provider = _setting('PROVIDER', 'openai').lower()
 
             if provider == 'openrouter':
-                if 'OPENROUTER_API_KEY' not in config:
+                openrouter_key = _setting('OPENROUTER_API_KEY')
+                if not openrouter_key:
                     raise DSPyConfigurationError("OPENROUTER_API_KEY must be set when PROVIDER is 'openrouter'")
                 if 'OPENAI_API_KEY' not in os.environ:
-                    os.environ['OPENAI_API_KEY'] = config['OPENROUTER_API_KEY']
+                    os.environ['OPENAI_API_KEY'] = openrouter_key
                 lm_kwargs['api_base'] = 'https://openrouter.ai/api/v1'
-                if 'OPENROUTER_SITE_URL' in config:
+                site_url = _setting('OPENROUTER_SITE_URL')
+                if site_url:
                     lm_kwargs['default_headers'] = {
-                        'HTTP-Referer': config['OPENROUTER_SITE_URL'],
-                        'X-Title': config.get('OPENROUTER_SITE_NAME', 'RAGFlow MCP Server')
+                        'HTTP-Referer': site_url,
+                        'X-Title': _setting('OPENROUTER_SITE_NAME', 'RAGFlow MCP Server')
                     }
                 logger.info(f"DSPy configured with OpenRouter model: {dspy_model}")
             elif provider == 'openai':
-                if 'OPENAI_API_KEY' not in config:
+                openai_key = _setting('OPENAI_API_KEY')
+                if not openai_key:
                     raise DSPyConfigurationError("OPENAI_API_KEY must be set when PROVIDER is 'openai'")
                 if 'OPENAI_API_KEY' not in os.environ:
-                    os.environ['OPENAI_API_KEY'] = config['OPENAI_API_KEY']
+                    os.environ['OPENAI_API_KEY'] = openai_key
                 logger.info(f"DSPy configured with OpenAI model: {dspy_model}")
             else:
                 raise DSPyConfigurationError(f"Unknown provider '{provider}'. Supported providers: 'openai', 'openrouter'")
@@ -298,10 +315,6 @@ class RAGFlowMCPServer:
         Returns the standard retrieval result, with `metadata.deepening` populated
         when refinement ran.
         """
-        # DSPY_AVAILABLE lives on the server module so tests can patch it there.
-        # Late import avoids a circular import at module load time.
-        from ragflow_claude_mcp import server as _server
-
         dataset_ids = validate_dataset_ids(dataset_ids)
         query = validate_query(query)
         deepening_level = validate_deepening_level(deepening_level) or 0
@@ -309,8 +322,9 @@ class RAGFlowMCPServer:
         if document_name:
             document_name = validate_document_name(document_name)
 
-        if deepening_level <= 0 or not _server.DSPY_AVAILABLE:
-            if deepening_level > 0 and not _server.DSPY_AVAILABLE:
+        # Read the flag dynamically so tests patching common.flags.DSPY_AVAILABLE take effect.
+        if deepening_level <= 0 or not flags.DSPY_AVAILABLE:
+            if deepening_level > 0 and not flags.DSPY_AVAILABLE:
                 logger.warning("DSPy deepening requested but not available, falling back to standard retrieval")
             return await self.retrieval_query(dataset_ids, query, document_name=document_name, **kwargs)
 
@@ -588,7 +602,6 @@ class RAGFlowMCPServer:
 
     async def upload_documents(self, dataset_id: str, file_paths: List[str]) -> Dict[str, Any]:
         """Stub. Real upload needs multipart/form-data; not wired up over MCP yet."""
-        endpoint = f"/api/v1/datasets/{dataset_id}/documents"
         return {"message": "Upload endpoint available but requires file handling"}
 
     async def list_documents(self, dataset_id: str) -> Dict[str, Any]:

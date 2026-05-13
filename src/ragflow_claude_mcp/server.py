@@ -20,14 +20,10 @@ from .common.exceptions import (
 )
 from .common.validation import validate_dataset_id, redact_sensitive_data
 
-# DSPy availability flag. Defined here so tests can patch it via
-# `ragflow_claude_mcp.server.DSPY_AVAILABLE`. The client reads this attribute
-# at call time (late import) so the patch propagates correctly.
-try:
-    import dspy  # noqa: F401
-    DSPY_AVAILABLE = True
-except ImportError:
-    DSPY_AVAILABLE = False
+# DSPy availability flag — canonical location is common.flags so client.ragflow
+# can read it without import cycles. Re-exported here for backward compatibility
+# (e.g. `from ragflow_claude_mcp.server import DSPY_AVAILABLE`).
+from .common.flags import DSPY_AVAILABLE  # noqa: F401
 
 # Plain stderr logging. Avoid logging_config here so the import doesn't go circular.
 logging.basicConfig(level=logging.INFO, stream=sys.stderr)
@@ -41,9 +37,10 @@ _ragflow_client: Optional[RAGFlowMCPServer] = None
 
 
 def load_config() -> Dict[str, Any]:
-    """Load config.json from the cwd. Missing file is fine; bad JSON is fatal."""
+    """Load config from RAGFLOW_CONFIG_PATH (or ./config.json). Missing file is fine; bad JSON is fatal."""
+    config_path = os.getenv("RAGFLOW_CONFIG_PATH", "config.json")
     try:
-        with open("config.json", "r") as f:
+        with open(config_path, "r") as f:
             config = json.load(f)
 
         if not isinstance(config, dict):
@@ -51,11 +48,11 @@ def load_config() -> Dict[str, Any]:
 
         return config
     except FileNotFoundError:
-        logger.warning("config.json not found. Please create it based on config.json.sample")
+        logger.warning(f"{config_path} not found. Using env vars only (or create one based on config.json.sample)")
         return {}
     except json.JSONDecodeError as e:
-        logger.error(f"Error decoding config.json: {e}. Please check its format.")
-        raise ConfigurationError(f"Invalid JSON in config.json: {e}")
+        logger.error(f"Error decoding {config_path}: {e}. Please check its format.")
+        raise ConfigurationError(f"Invalid JSON in {config_path}: {e}")
     except Exception as e:
         logger.error(f"Unexpected error loading config: {e}")
         raise ConfigurationError(f"Failed to load configuration: {e}")
@@ -71,7 +68,7 @@ def get_ragflow_client() -> RAGFlowMCPServer:
             # Env overrides config file.
             RAGFLOW_BASE_URL = os.getenv("RAGFLOW_BASE_URL", config.get("RAGFLOW_BASE_URL"))
             RAGFLOW_API_KEY = os.getenv("RAGFLOW_API_KEY", config.get("RAGFLOW_API_KEY"))
-            RAGFLOW_DEFAULT_RERANK = config.get("RAGFLOW_DEFAULT_RERANK", "rerank-multilingual-v3.0")
+            RAGFLOW_DEFAULT_RERANK = os.getenv("RAGFLOW_DEFAULT_RERANK", config.get("RAGFLOW_DEFAULT_RERANK", "rerank-multilingual-v3.0"))
 
             CF_ACCESS_CLIENT_ID = os.getenv("CF_ACCESS_CLIENT_ID", config.get("CF_ACCESS_CLIENT_ID"))
             CF_ACCESS_CLIENT_SECRET = os.getenv("CF_ACCESS_CLIENT_SECRET", config.get("CF_ACCESS_CLIENT_SECRET"))
