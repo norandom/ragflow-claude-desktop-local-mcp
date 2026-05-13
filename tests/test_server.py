@@ -247,7 +247,7 @@ class TestDSPyIntegration:
             assert result is not None
     
     @pytest.mark.asyncio
-    @patch('ragflow_claude_mcp.server.DSPY_AVAILABLE', False)
+    @patch('ragflow_claude_mcp.common.flags.DSPY_AVAILABLE', False)
     async def test_deepening_disabled_when_dspy_unavailable(self, server):
         """Test that deepening is disabled when DSPy is not available."""
         mock_result = {"code": 0, "data": {"chunks": []}}

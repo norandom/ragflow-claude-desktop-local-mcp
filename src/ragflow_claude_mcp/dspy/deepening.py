@@ -5,8 +5,7 @@ times depending on `deepening_level`.
 """
 
 import dspy
-from typing import Dict, List, Any, Optional
-import json
+from typing import Dict, List, Any
 import logging
 
 logger = logging.getLogger(__name__)

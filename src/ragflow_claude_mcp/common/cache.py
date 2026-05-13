@@ -5,7 +5,6 @@ Keeps the cache from growing unbounded and drops stale entries on read.
 
 import time
 from typing import Any, Dict, Optional, Tuple
-from .exceptions import CacheError
 
 
 class TTLCache:
