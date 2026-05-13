@@ -10,8 +10,7 @@ requires-python = ">=3.12"
 dependencies = [
     "aiohttp>=3.12.13",
     "mcp>=1.10.1",
-    "dspy-ai>=2.5.0",
-    "dspy",
+    "dspy>=2.5.0",
 ]
 
 [project.optional-dependencies]
@@ -28,9 +27,6 @@ ragflow-claude-mcp = "ragflow_claude_mcp.server:main"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
-
-[tool.uv.sources]
-dspy = { git = "https://github.com/stanfordnlp/dspy.git" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
