@@ -4,7 +4,7 @@ version = "0.0.0"
 description = "Dagger CI module for ragflow-claude-mcp"
 requires-python = ">=3.10"
 dependencies = [
-    "dagger-io>=0.18.10",
+    "dagger-io",
 ]
 
 [build-system]
