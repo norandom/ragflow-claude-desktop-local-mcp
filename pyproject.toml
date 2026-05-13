@@ -8,14 +8,14 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
-    "aiohttp>=3.12.13",
-    "mcp>=1.10.1",
-    "dspy>=2.5.0",
+    "aiohttp>=3.13.4",
+    "mcp>=1.23.0",
+    "dspy>=3.0.4b1",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.4.1",
+    "pytest>=9.0.3",
     "pytest-asyncio>=1.0.0",
     "pytest-mock>=3.14.1",
     "pytest-cov>=4.0.0",
