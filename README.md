@@ -1,5 +1,7 @@
 # RAGFlow Claude MCP Server
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/norandom/ragflow-claude-desktop-local-mcp)
+
 A small Model Context Protocol (MCP) server that hooks Claude Desktop (and other MCP clients) up to a [RAGFlow](https://github.com/infiniflow/ragflow) instance. It exposes the RAGFlow REST API as a handful of tools so the LLM can query knowledge bases and pull document chunks into its context.
 
 This is personal-use software I wrote for my own R&D. It's not bug-free and the code is not pretty. It works for what I need.
