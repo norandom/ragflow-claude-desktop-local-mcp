@@ -1,6 +1,6 @@
 [project]
 name = "ragflow-claude-mcp"
-version = "0.1.1"
+version = "0.1.2"
 description = "Add your description here"
 readme = "README.md"
 authors = [
@@ -11,6 +11,7 @@ dependencies = [
     "aiohttp>=3.13.4",
     "mcp>=1.23.0",
     "dspy>=2.5.0",
+    "litellm>=1.83.10",
 ]
 
 [project.optional-dependencies]
