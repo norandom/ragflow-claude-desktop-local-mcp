@@ -8,8 +8,8 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
-    "aiohttp>=3.12.13",
-    "mcp>=1.10.1",
+    "aiohttp>=3.13.4",
+    "mcp>=1.23.0",
     "dspy>=2.5.0",
 ]
 
