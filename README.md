@@ -1,6 +1,9 @@
 # RAGFlow Claude MCP Server
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/norandom/ragflow-claude-desktop-local-mcp)
+[![GitHub release](https://img.shields.io/github/v/release/norandom/ragflow-claude-desktop-local-mcp?include_prereleases&sort=semver)](https://github.com/norandom/ragflow-claude-desktop-local-mcp/releases)
+[![Tests](https://github.com/norandom/ragflow-claude-desktop-local-mcp/actions/workflows/tests.yml/badge.svg)](https://github.com/norandom/ragflow-claude-desktop-local-mcp/actions/workflows/tests.yml)
+[![CodeQL](https://github.com/norandom/ragflow-claude-desktop-local-mcp/actions/workflows/codeql.yml/badge.svg)](https://github.com/norandom/ragflow-claude-desktop-local-mcp/actions/workflows/codeql.yml)
 
 A small Model Context Protocol (MCP) server that hooks Claude Desktop (and other MCP clients) up to a [RAGFlow](https://github.com/infiniflow/ragflow) instance. It exposes the RAGFlow REST API as a handful of tools so the LLM can query knowledge bases and pull document chunks into its context.
 
