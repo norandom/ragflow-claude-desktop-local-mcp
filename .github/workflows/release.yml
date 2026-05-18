@@ -53,6 +53,8 @@ jobs:
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
+        # GitHub Releases API. Skipped on Gitea.
+        if: ${{ github.server_url == 'https://github.com' }}
         uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v2.1.0
         with:
           tag_name: ${{ steps.tag.outputs.tag }}
@@ -60,5 +62,20 @@ jobs:
           generate_release_notes: true
           fail_on_unmatched_files: true
           files: |
+            dist/*.whl
+            dist/*.tar.gz
+
+      - name: Create Gitea Release
+        # Gitea-native release API. Runs only on a Gitea instance, where
+        # github.server_url is the instance URL (not github.com).
+        # GITEA_TOKEN is the auto-provisioned per-job token on Gitea Actions.
+        # NOTE: @v1 is a moving tag — pin to a commit SHA for supply-chain safety.
+        if: ${{ github.server_url != 'https://github.com' }}
+        uses: akkuman/gitea-release-action@v1
+        with:
+          token: ${{ secrets.GITEA_TOKEN }}
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: ${{ steps.tag.outputs.tag }}
+          files: |-
             dist/*.whl
             dist/*.tar.gz

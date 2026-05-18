@@ -55,7 +55,8 @@ jobs:
         path: htmlcov/
     
     - name: Comment coverage on PR
-      if: github.event_name == 'pull_request'
+      # GitHub-only: posts via GitHub PR API. Gitea (github.server_url != github.com) skips.
+      if: ${{ github.event_name == 'pull_request' && github.server_url == 'https://github.com' }}
       uses: py-cov-action/python-coverage-comment-action@v3
       with:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

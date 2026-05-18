@@ -70,7 +70,8 @@ jobs:
           echo "If secrets are found, the workflow will fail to prevent the push/merge."
           
       - name: Comment PR on failure
-        if: failure() && github.event_name == 'pull_request'
+        # GitHub-only: actions/github-script uses the GitHub API. Gitea skips.
+        if: ${{ failure() && github.event_name == 'pull_request' && github.server_url == 'https://github.com' }}
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}

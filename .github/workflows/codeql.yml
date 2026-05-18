@@ -12,6 +12,9 @@ jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
     runs-on: ubuntu-latest
+    # CodeQL is GitHub-proprietary (no Gitea Security tab / SARIF ingest).
+    # Skip the whole job on Gitea, where github.server_url is the instance URL.
+    if: ${{ github.server_url == 'https://github.com' }}
     timeout-minutes: 360
     permissions:
       # required for all workflows
