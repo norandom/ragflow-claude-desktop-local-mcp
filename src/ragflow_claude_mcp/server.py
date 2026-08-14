@@ -454,7 +454,7 @@ def main():
                     write_stream,
                     InitializationOptions(
                         server_name="ragflow-mcp",
-                        server_version="1.0.0",
+                        server_version="0.2.0",
                         capabilities=types.ServerCapabilities(
                             tools=types.ToolsCapability(listChanged=True),
                             logging=types.LoggingCapability(),
