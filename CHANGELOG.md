@@ -14,6 +14,9 @@
   Configure Dependabot for both uv and GitHub Actions. Routine version PRs
   are disabled for the owner's main-only workflow; security alerts remain active.
 - Enforce the checked-in lockfile in test CI and Dagger tests.
+- Run release tests and builds directly with uv on Python 3.12. The previous
+  Dagger release path failed while loading its Python SDK, before project tests.
+  Manual releases now check out the requested tag rather than the default ref.
 - Isolate DSPy settings in OpenRouter configuration tests, restoring the
   previously skipped missing-key fallback test.
 - Rewrite the README around a minimal first retrieval, with Claude Desktop,

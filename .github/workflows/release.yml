@@ -27,16 +27,21 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          ref: ${{ inputs.tag || github.ref }}
 
-      - name: Set up Dagger CLI
-        uses: dagger/dagger-for-github@27b130bf0f79a7f6fbbbe0fbca6760dc9bb40a77 # v8.4.1
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
-          version: "0.20.8"
-          verb: version
+          python-version: '3.12'
 
-      - name: Test + build via Dagger
+      - name: Set up uv
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+
+      - name: Test and build release
         run: |
-          dagger call ci --source=. export --path=./dist
+          uv sync --locked --extra dev
+          uv run --locked pytest
+          uv build
 
       - name: List artifacts
         run: ls -la dist/

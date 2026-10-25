@@ -243,4 +243,4 @@ uv run --locked pytest --cov=src/ragflow_claude_mcp --cov-report=term-missing
 uv build
 ```
 
-The release workflow tests and builds through Dagger. Maintainers work directly on `main` and keep no long-lived feature branches. Use SSH-signed commits as described in [CONTRIBUTING.md](CONTRIBUTING.md) and [COMMIT_SIGNING.md](COMMIT_SIGNING.md).
+The release workflow runs the tests and builds packages with uv on Python 3.12. The `.dagger` module is available for separate container-based checks. Maintainers work directly on `main` and keep no long-lived feature branches. Use SSH-signed commits as described in [CONTRIBUTING.md](CONTRIBUTING.md) and [COMMIT_SIGNING.md](COMMIT_SIGNING.md).
