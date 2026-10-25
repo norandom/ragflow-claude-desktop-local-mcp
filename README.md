@@ -235,11 +235,12 @@ To disconnect, remove the `ragflow` entry from Claude Desktop, run `codex mcp re
 ## Development
 
 ```sh
-git switch -c feature/your-change
+git switch main
+git pull --ff-only origin main
 uv sync --locked --extra dev
 uv run --locked pytest
 uv run --locked pytest --cov=src/ragflow_claude_mcp --cov-report=term-missing
 uv build
 ```
 
-The release workflow tests and builds through Dagger. Contributions go through pull requests; use SSH-signed commits as described in [CONTRIBUTING.md](CONTRIBUTING.md) and [COMMIT_SIGNING.md](COMMIT_SIGNING.md).
+The release workflow tests and builds through Dagger. Maintainers work directly on `main` and keep no long-lived feature branches. Use SSH-signed commits as described in [CONTRIBUTING.md](CONTRIBUTING.md) and [COMMIT_SIGNING.md](COMMIT_SIGNING.md).
