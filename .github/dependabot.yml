@@ -2,6 +2,8 @@ version: 2
 updates:
   - package-ecosystem: "uv"
     directory: "/"
+    # Keep alerts/security updates; apply routine version updates on main.
+    open-pull-requests-limit: 0
     schedule:
       interval: "weekly"
     groups:
@@ -9,6 +11,7 @@ updates:
         update-types: ["minor", "patch"]
   - package-ecosystem: "github-actions"
     directory: "/"
+    open-pull-requests-limit: 0
     schedule:
       interval: "weekly"
     groups:

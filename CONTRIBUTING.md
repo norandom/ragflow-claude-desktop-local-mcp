@@ -39,8 +39,9 @@ git push origin main
 
 Review hosted test and security results after pushing. Tag releases from the
 validated `main` commit. The tag triggers the release test/build workflow.
-Dependabot may open temporary update branches; incorporate the useful updates,
-then close superseded requests and remove their branches.
+Routine Dependabot version PRs are disabled; apply dependency refreshes directly
+on `main`. Security updates can still open temporary branches. Incorporate the
+fixes, then close superseded requests and remove their branches.
 
 Contributors without write access can submit a pull request from a fork.
 Describe the problem, the resulting behavior, and what you tested.

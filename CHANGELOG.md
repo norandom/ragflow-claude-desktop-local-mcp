@@ -11,7 +11,8 @@
 - Fix Bandit's SARIF generation/upload order and remove duplicate scans and
   uploads. Pin Bandit 1.9.4 with its SARIF extra and add manual dispatch.
 - Update GitHub Actions and pin all workflow action references to commits.
-  Configure Dependabot for both uv and GitHub Actions.
+  Configure Dependabot for both uv and GitHub Actions. Routine version PRs
+  are disabled for the owner's main-only workflow; security alerts remain active.
 - Enforce the checked-in lockfile in test CI and Dagger tests.
 - Isolate DSPy settings in OpenRouter configuration tests, restoring the
   previously skipped missing-key fallback test.
