@@ -1,68 +1,60 @@
-# RAGFlow Claude MCP Server
+# RAGFlow MCP for Claude Desktop, Codex, and Antigravity
 
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/norandom/ragflow-claude-desktop-local-mcp)
-[![GitHub release](https://img.shields.io/github/v/release/norandom/ragflow-claude-desktop-local-mcp?include_prereleases&sort=semver)](https://github.com/norandom/ragflow-claude-desktop-local-mcp/releases)
+[![GitHub release](https://img.shields.io/github/v/release/norandom/ragflow-claude-desktop-local-mcp?sort=semver)](https://github.com/norandom/ragflow-claude-desktop-local-mcp/releases)
 [![Tests](https://github.com/norandom/ragflow-claude-desktop-local-mcp/actions/workflows/tests.yml/badge.svg)](https://github.com/norandom/ragflow-claude-desktop-local-mcp/actions/workflows/tests.yml)
-[![CodeQL](https://github.com/norandom/ragflow-claude-desktop-local-mcp/actions/workflows/codeql.yml/badge.svg)](https://github.com/norandom/ragflow-claude-desktop-local-mcp/actions/workflows/codeql.yml)
 
-A small Model Context Protocol (MCP) server that hooks Claude Desktop (and other MCP clients) up to a [RAGFlow](https://github.com/infiniflow/ragflow) instance. It exposes the RAGFlow REST API as a handful of tools so the LLM can query knowledge bases and pull document chunks into its context.
+Search documents you already have in [RAGFlow](https://github.com/infiniflow/ragflow) from your AI client. This local MCP server retrieves document chunks and similarity scores, so you can ask questions across your knowledge bases without copying passages into each conversation.
 
-This is personal-use software I wrote for my own R&D. It's not bug-free and the code is not pretty. It works for what I need.
+Start with ordinary retrieval. You need a RAGFlow API key, but no separate OpenAI or OpenRouter key for this server unless you enable optional query deepening. Your AI client still needs its own account or model configuration.
 
-## What it does
+I built this for my own R&D. Try it on a dataset whose contents you know before relying on it for research. The first check is concrete: can your client list that dataset and retrieve a passage you can verify in the original document?
 
-- Direct retrieval: pulls raw document chunks with similarity scores from RAGFlow's `/retrieval` endpoint.
-- Multi-KB search: a single query can hit several knowledge bases at once.
-- DSPy query deepening: optional iterative query refinement (uses an LLM to analyse intermediate results and rewrite the query).
-- ~~Reranking~~ — currently broken on the RAGFlow side, see [Known issues](#known-issues).
-- Tunable result control: `page_size`, `similarity_threshold`, `top_k`, pagination.
-- Document filter: limit results to one document inside a dataset (fuzzy name matching).
-- Dataset lookup by name (case-insensitive, fuzzy) instead of by ID.
-- Cloudflare Zero Trust authentication when your RAGFlow sits behind it.
+## Before you start
 
-## Installation
+You need:
 
-1. Clone:
-   ```bash
-   git clone https://github.com/norandom/ragflow-claude-desktop-local-mcp
-   cd ragflow-claude-desktop-local-mcp
-   ```
+- A reachable RAGFlow instance with an API key and at least one parsed, indexed document.
+- Git, [uv](https://docs.astral.sh/uv/getting-started/installation/), and Python 3.12 or newer. The quickstart uses Python 3.12, which is tested in CI.
+- Claude Desktop, Codex CLI, Antigravity CLI (`agy`), or another client that can launch a local stdio MCP server.
 
-2. Install:
-   ```bash
-   # On macOS, install DSPy first to dodge build issues:
-   pip install git+https://github.com/stanfordnlp/dspy.git
+This project connects to an existing RAGFlow installation. It does not install RAGFlow or upload and index your documents.
 
-   uv install
-   ```
+The MCP process runs on your computer. Queries go to your RAGFlow instance; retrieved content returns to your AI client and may be sent to that client's model provider. Optional DSPy deepening also sends queries and result summaries to the provider you configure below. Check those data paths before using sensitive documents.
 
-3. Configure: copy the sample and fill in your RAGFlow details.
-   ```bash
-   cp config.json.sample config.json
-   ```
-   Keys:
-   - `RAGFLOW_BASE_URL`: e.g. `http://your-ragflow-server:9380`
-   - `RAGFLOW_API_KEY`: your RAGFlow API key
-   - `RAGFLOW_DEFAULT_RERANK`: rerank model (default `rerank-multilingual-v3.0`)
-   - `CF_ACCESS_CLIENT_ID` *(optional)*: Cloudflare Zero Trust service-token ID
-   - `CF_ACCESS_CLIENT_SECRET` *(optional)*: Cloudflare Zero Trust service-token secret
-   - `DSPY_MODEL`: DSPy LM (default `openai/gpt-4o-mini`)
-   - `OPENAI_API_KEY`: needed for DSPy deepening
+## Install and configure
 
-### Cloudflare Zero Trust
+Run these commands in a terminal, including PowerShell on Windows:
 
-If your RAGFlow is behind Cloudflare Zero Trust, grab a service token from the dashboard and add it to `config.json`:
+```sh
+git clone --branch v0.2.1 https://github.com/norandom/ragflow-claude-desktop-local-mcp.git
+cd ragflow-claude-desktop-local-mcp
+uv sync --locked --python 3.12
+```
+
+This checks out the release tag and installs its locked dependencies. A detached-HEAD message is normal for a release checkout.
+
+Create `config.json` in the cloned directory with these two entries:
 
 ```json
 {
-  "CF_ACCESS_CLIENT_ID": "your-client-id.access",
-  "CF_ACCESS_CLIENT_SECRET": "your-client-secret"
+  "RAGFLOW_BASE_URL": "http://your-ragflow-server:9380",
+  "RAGFLOW_API_KEY": "replace-with-your-ragflow-api-key"
 }
 ```
 
-When both are set, every API request goes out with the `CF-Access-Client-Id` and `CF-Access-Client-Secret` headers. No code change needed.
+Use the base URL, without `/api/v1`. Use HTTPS when connecting across an untrusted network. `config.json` is ignored by Git, but contains a credential: keep it private. [config.json.sample](config.json.sample) lists optional settings; leave unused placeholder credentials out of your working configuration.
 
-## Claude Desktop config
+Environment variables override values in the file. `RAGFLOW_CONFIG_PATH` selects a different config file; otherwise the server reads `config.json` from its working directory. There is no built-in RAGFlow address or API key.
+
+## Connect your client
+
+Choose one client below. Replace `/absolute/path/to/ragflow-claude-desktop-local-mcp` with the directory you cloned. On Windows, `C:/Users/you/Source/ragflow-claude-desktop-local-mcp` works in these examples. Quote paths containing spaces.
+
+The client starts the server on demand over stdio. You do not need to start a web server or open a local port.
+
+### Claude Desktop
+
+Open Settings, then Developer, then Edit Config. Add the `ragflow` entry to the existing `mcpServers` object in `claude_desktop_config.json`; preserve your other servers.
 
 ```json
 {
@@ -71,8 +63,9 @@ When both are set, every API request goes out with the `CF-Access-Client-Id` and
       "command": "uv",
       "args": [
         "run",
+        "--locked",
         "--directory",
-        "/path/to/ragflow-claude-desktop-local-mcp",
+        "/absolute/path/to/ragflow-claude-desktop-local-mcp",
         "ragflow-claude-mcp"
       ]
     }
@@ -80,277 +73,173 @@ When both are set, every API request goes out with the `CF-Access-Client-Id` and
 }
 ```
 
-## Tools
+Fully quit and reopen Claude Desktop. If it cannot find `uv`, replace `command` with its full executable path. Find it with `Get-Command uv` in PowerShell or `command -v uv` on macOS/Linux. See the [local MCP setup guide](https://modelcontextprotocol.io/docs/develop/connect-local-servers) for client configuration and logs.
 
-### `ragflow_retrieval_by_name` (the one I use most)
+### Codex CLI
 
-Retrieve chunks across one or more datasets by name. Returns raw chunks with similarity scores.
+Register the local command:
 
-Params:
-- `dataset_names` (required) — list, e.g. `["BASF", "Quant Literature"]`
-- `query` (required)
-- `document_name` (optional) — restrict to one document; fuzzy match
-- `top_k` (optional, default 1024) — vector candidates
-- `similarity_threshold` (optional, default 0.2) — 0.0–1.0
-- `page` (optional, default 1)
-- `page_size` (optional, default 10)
-- `use_rerank` (optional, default false) — currently broken upstream, see Known issues
-- `deepening_level` (optional, default 0) — DSPy refinement, 0–3
-
-### `ragflow_retrieval`
-
-Same shape, but takes `dataset_ids: List[str]` instead of names.
-
-### Multi-KB search
-
-You can search across several knowledge bases in one call. Make sure they share an embedding model — mixing incompatible embeddings will tank the relevance scores.
-
-```
-Use ragflow_retrieval_by_name with dataset_names ["Finance Reports", "Legal Documents"] and query "Summarize the key financial risks and compliance requirements for new market entry."
+```sh
+codex mcp add ragflow -- uv run --locked --directory "/absolute/path/to/ragflow-claude-desktop-local-mcp" ragflow-claude-mcp
+codex mcp get ragflow
 ```
 
-### `ragflow_list_datasets`
+Start a new `codex` session and use `/mcp` to check the connection. Codex stores MCP settings in `~/.codex/config.toml`; alternatively, add this table there instead of running the registration command:
 
-Lists every knowledge base on your RAGFlow instance. No params. Walks all pages internally.
-
-### `ragflow_list_documents`
-
-Lists documents in a dataset. Walks all pages.
-- `dataset_id` (required)
-
-### `ragflow_get_chunks`
-
-Returns chunks (with references) for one document.
-- `dataset_id` (required)
-- `document_id` (required)
-
-### `ragflow_list_sessions`
-
-Shows active chat sessions per dataset. No params.
-
-### `ragflow_list_documents_by_name`
-
-Lists documents in a dataset, looked up by name.
-- `dataset_name` (required)
-
-### `ragflow_reset_session`
-
-Drops the chat session for a dataset.
-- `dataset_id` (required)
-
-## Tuning the retrieval
-
-The retrieval tools take three knobs:
-
-- `page_size` — chunks per page (default 10).
-- `similarity_threshold` — drops chunks below this score (default 0.2).
-- `top_k` — pool size for the vector search before filtering (default 1024).
-
-Some starting points that work for me:
-
-- Broader recall: `page_size=15`, `similarity_threshold=0.15`.
-- Tight precision: `page_size=5`, `similarity_threshold=0.4`.
-- Heavy research: `page_size=20`, `similarity_threshold=0.1`, `deepening_level=1`.
-- Hard queries: `deepening_level=2`.
-- Speed: keep `deepening_level=0` and skip rerank.
-
-## Examples
-
-Basic retrieval by name:
-
-```
-Use ragflow_retrieval_by_name with dataset_names ["BASF"] and query "What is BASF's latest income statement? Revenue, operating income, net income, and other key figures."
+```toml
+[mcp_servers.ragflow]
+command = "uv"
+args = ["run", "--locked", "--directory", "/absolute/path/to/ragflow-claude-desktop-local-mcp", "ragflow-claude-mcp"]
 ```
 
-Restrict to one document:
+To use a config file outside the checkout, add `--env "RAGFLOW_CONFIG_PATH=/absolute/path/to/config.json"` before the `--` in the registration command. See [OpenAI's MCP documentation](https://developers.openai.com/codex/mcp) for client settings.
 
-```
-Use ragflow_retrieval_by_name with dataset_names ["BASF"], document_name "annual_report_2023", and query "What were the key financial highlights for 2023?"
-```
+### Antigravity CLI (`agy`)
 
-Document names match fuzzily — `"annual"` will hit `annual_report_2023.pdf` and `annual_report_2024.pdf`. When several match, the server picks the most recent and lists the alternatives in the response metadata.
+Register the same stdio command:
 
-DSPy deepening for a tricky query:
-
-```
-Use ragflow_retrieval_by_name with dataset_names ["Quant Literature"], query "what is a volatility clock", deepening_level 2.
+```sh
+agy mcp add --type stdio ragflow uv run --locked --directory "/absolute/path/to/ragflow-claude-desktop-local-mcp" ragflow-claude-mcp
+agy mcp list
 ```
 
-Multi-page:
+Start a new `agy` session and open `/mcp` to check the server. If it is disabled, run `agy mcp enable ragflow`.
 
-```
-Use ragflow_retrieval_by_name with dataset_names ["BASF"], query "BASF business segments", page_size 10, page 2.
-```
+For a config file outside the checkout, put `--env "RAGFLOW_CONFIG_PATH=/absolute/path/to/config.json"` before `ragflow` in the registration command. The `agy mcp add` options belong before the server name; the arguments after `uv` belong to uv. See [Antigravity's MCP documentation](https://antigravity.google/docs/mcp?tab=cli) for details.
 
-List what's available:
+### Other MCP clients
 
-```
-Use ragflow_list_datasets.
-```
+Use `uv` as the command and the same argument list shown for Claude Desktop. This server exposes stdio, not an HTTP MCP endpoint: do not enter your RAGFlow URL as an MCP server URL.
 
-```
-Use ragflow_list_documents_by_name with dataset_name "BASF".
-```
+## Verify your first retrieval
 
-Pull specific chunks:
+In your client, ask:
 
-```
-Use ragflow_get_chunks with dataset_id "43066ee0599411f089787a39c10de57b" and document_id "d74a1c105a3311f09fc94a0fcd8b7722".
+```text
+Use ragflow_list_datasets and show the available dataset names.
 ```
 
-## Bigger prompts
+Then substitute an actual dataset name and a question whose answer you know:
 
-Some examples of how I drive it from Claude Desktop.
-
-Financial deep-dive:
-
-```
-Help me analyse BASF's recent financials.
-
-1. Use ragflow_retrieval_by_name to search ["BASF"] for the latest income statement
-   (revenue, operating income, net income). Use page_size 15,
-   similarity_threshold 0.15, deepening_level 1.
-
-2. Then run ragflow_retrieval_by_name again for the cash flow statement,
-   page_size 10, similarity_threshold 0.2.
-
-3. Finally look for year-over-year changes with page_size 12,
-   similarity_threshold 0.18.
+```text
+Use ragflow_retrieval_by_name with dataset_names ["My Knowledge Base"],
+query "What does the document say about our backup schedule?",
+page_size 5, deepening_level 0, and use_rerank false.
+Show the returned passages and their document references before summarizing.
 ```
 
-Multilingual research:
+A working connection returns dataset names, then relevant chunks from the selected dataset. Compare a returned passage with its source. If the passage is missing or irrelevant, check indexing and retrieval settings before enabling deepening. A fluent answer alone does not establish that retrieval worked.
 
-```
-Use ragflow_retrieval_by_name with dataset_names ["BASF"],
-query "Was sind die wichtigsten Geschäftsbereiche von BASF?",
-deepening_level 2.
-```
+For a team trial, have someone familiar with the dataset check a few known-answer queries. Share the queries and source checks with a colleague who uses the same material before adding more datasets.
 
-DSPy detects the query language and refines accordingly. I've used this for German, English, and mixed-language queries. It works as long as the underlying documents have content in those languages.
+## Search options and tools
 
-Document-filtered research:
+`ragflow_retrieval_by_name` is the usual starting point. It takes `dataset_names` (a list) and `query`. Use `ragflow_retrieval` with `dataset_ids` when you want to avoid ambiguity in name matching.
 
-```
-1. Use ragflow_list_documents_by_name with dataset_name "BASF" to see what's in there.
-2. Use ragflow_retrieval_by_name with dataset_names ["BASF"],
-   document_name "sustainability_report", query "carbon neutrality goals",
-   page_size 15, deepening_level 1.
-3. Follow up with document_name "annual_report_2023" and
-   query "environmental investments".
-```
+| Option | Default | When to change it |
+| --- | --- | --- |
+| `document_name` | No filter | Restrict retrieval to a document; names match fuzzily. |
+| `page_size` | `10` | Request fewer chunks for a quick check or more for broader research. |
+| `page` | `1` | Fetch another page. |
+| `similarity_threshold` | `0.2` | Lower it to admit more results; raise it to filter weak matches. |
+| `top_k` | `1024` | Change the candidate pool used for vector search. |
+| `use_rerank` | `false` | Enable after checking your RAGFlow reranker configuration. |
+| `deepening_level` | `0` | Try up to 1, 2, or 3 refinement passes after configuring DSPy. |
 
-Cross-KB query:
+To search several datasets, pass multiple names, for example `["Finance Reports", "Legal Documents"]`. Use datasets with compatible embedding models. Dataset lookup is case-insensitive and supports partial names; use exact names or IDs when several are similar.
 
-```
-Use ragflow_retrieval_by_name with dataset_names ["BASF", "Industry Reports"],
-query "chemical industry sustainability benchmarks",
-page_size 12, deepening_level 1.
-```
+For a document-specific query, first list documents, then use a specific `document_name`. Fuzzy matching can select a different document than you intended; inspect the response metadata for matches.
 
-## How DSPy deepening works
+| Tool | Required inputs | Purpose |
+| --- | --- | --- |
+| `ragflow_list_datasets` | None | List datasets accessible with your API key. |
+| `ragflow_list_documents` | `dataset_id` | List documents in a dataset. |
+| `ragflow_list_documents_by_name` | `dataset_name` | List documents using a dataset name. |
+| `ragflow_get_chunks` | `dataset_id`, `document_id` | Read chunks for a document. |
+| `ragflow_retrieval` | `dataset_ids`, `query` | Retrieve chunks by dataset IDs. |
+| `ragflow_retrieval_by_name` | `dataset_names`, `query` | Retrieve chunks by dataset names. |
+| `ragflow_list_sessions` | None | Inspect locally tracked chat sessions. |
+| `ragflow_reset_session` | `dataset_id` | Reset a tracked session. |
 
-`deepening_level` runs an LLM-driven refinement loop on top of the retrieval:
+## Optional configuration
 
-- 0: no deepening (default).
-- 1: one refinement pass.
-- 2: two passes with gap analysis.
-- 3: three+ passes plus result merging.
+### Query deepening with DSPy
 
-Each pass: do the search, summarise the top results, ask the LLM what's missing, generate a new query, run that. The response metadata includes the original query, every refined query, and the reasoning at each step.
+Deepening asks an additional LLM to analyze retrieved results and rewrite the query. It adds latency and provider usage charges. Leave `deepening_level=0` for ordinary retrieval.
 
-DSPy needs:
-- `DSPY_MODEL` — `openai/gpt-4o-mini` works fine
-- `OPENAI_API_KEY`
+For OpenAI, add these entries to your `config.json`:
 
-## Reranking (currently broken)
-
-When working, reranking replaces the vector cosine score with the rerank model's score (typically 10–30% better relevance in my experience). RAGFlow has a known bug right now where `use_rerank=true` produces:
-
-> UnsupportedProtocol: Request URL is missing an 'http://' or 'https://' protocol
-
-So leave `use_rerank=false` until the upstream issue is fixed. Standard vector retrieval works normally.
-
-## How dataset lookup works
-
-- Case-insensitive name matching.
-- Fuzzy match for partial names.
-- Datasets are cached for name lookup; cache misses trigger a refresh.
-- If lookup fails, the error includes the available dataset names so you know what was actually there.
-
-## Document matching
-
-When you pass `document_name`:
-
-- Exact match wins, then "starts with", then "contains", then partial.
-- Among ties, the more recently updated document wins.
-- Names containing `2024`, `2023`, `latest`, `current`, or `new` get a small score bonus.
-- All matches are returned in the response metadata so you can re-issue with a more specific name.
-
-## Error handling
-
-Reasonable error messages for: API errors, missing datasets, unreachable RAGFlow, broken sessions, invalid input, and config problems. Sensitive values are redacted in logs.
-
-## Environment variables
-
-- `RAGFLOW_BASE_URL` — overrides the config file. Default in code: `http://192.168.122.93:9380` (which is my local instance).
-- `RAGFLOW_API_KEY` — required.
-
-## Development
-
-Run the server directly:
-
-```bash
-uv run ragflow-claude-mcp
+```json
+{
+  "PROVIDER": "openai",
+  "DSPY_MODEL": "openai/gpt-4o-mini",
+  "OPENAI_API_KEY": "replace-with-your-openai-api-key"
+}
 ```
 
-It listens on stdio, the way MCP servers do.
+For OpenRouter, use:
 
-Dev deps:
-
-```bash
-uv install --extra dev
+```json
+{
+  "PROVIDER": "openrouter",
+  "DSPY_MODEL": "openai/gpt-4o-mini",
+  "OPENROUTER_API_KEY": "replace-with-your-openrouter-api-key"
+}
 ```
 
-That gets pytest + the asyncio/mock/cov plugins.
+These are additions to the RAGFlow settings, not replacement files. Restart the MCP server after changing configuration. `OPENROUTER_SITE_URL` and `OPENROUTER_SITE_NAME` are optional attribution settings.
 
-Tests:
+Start with `deepening_level=1` and compare its results with the original query. Levels 1 through 3 set the maximum refinement passes; the loop can stop early. The implementation returns the last result set, not a merged union of all searches. Metadata records the refinement process. Configuration or refinement failures can fall back to ordinary retrieval, so check metadata and logs if deepening appears to have no effect.
 
-```bash
-uv run pytest
-uv run pytest --cov=src --cov-report=html --cov-report=term
-uv run pytest tests/test_server.py
-uv run pytest -v
-```
+### Cloudflare Zero Trust
 
-Coverage is around 44% with 22/23 tests passing (one is skipped because of an intermittent CI flake). Tests cover server init, RAGFlow API integration, DSPy deepening, OpenAI/OpenRouter config branches, and config loading.
+If RAGFlow is behind Cloudflare Access, add both `CF_ACCESS_CLIENT_ID` and `CF_ACCESS_CLIENT_SECRET` from an authorized service token. The server sends the corresponding Access headers with API requests. Leave both unset for a direct RAGFlow connection.
 
-## Implementation notes
+### Reranking
 
-The retrieval API is the only RAGFlow surface the server actually relies on. No assistant/chat dependencies, no server-side prompt config — just chunks back. Easier to reason about, easier to debug.
+`RAGFLOW_DEFAULT_RERANK` selects the reranking model when `use_rerank=true`. This project has encountered `UnsupportedProtocol: Request URL is missing an 'http://' or 'https://' protocol` with reranking on RAGFlow. That observation does not establish the status of every RAGFlow version. Leave reranking off for the first retrieval; if you see this error, use `use_rerank=false` and check the provider URL configured in RAGFlow.
 
 ## Troubleshooting
 
-- "Dataset not found": run `ragflow_list_datasets` to see what's actually there.
-- Connection errors: double-check `RAGFLOW_BASE_URL` and `RAGFLOW_API_KEY`.
-- Server won't start: did `uv install` actually finish?
-- Need raw chunks: that's `ragflow_retrieval_by_name` / `ragflow_retrieval`.
-- Stuck session: `ragflow_list_sessions` then `ragflow_reset_session`.
-- Cloudflare 403s: confirm `CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET` match an active service token on the Zero Trust app.
+| Symptom | Check next |
+| --- | --- |
+| Client cannot start the server | Run `uv sync --locked --python 3.12` in the checkout. Verify the absolute checkout path and that the client can find `uv`. |
+| Server waits silently in a terminal | It speaks MCP over stdio. Let your client launch it; this is not an interactive shell or HTTP server. |
+| Missing configuration | Confirm `config.json` is in the checkout, or set an absolute `RAGFLOW_CONFIG_PATH`. Check environment overrides. |
+| Connection error or 401 | Check the RAGFlow base URL, network access, and API key. The base URL must include `http://` or `https://`. |
+| Cloudflare 403 | Check both Access service-token values and the application's Access policy. |
+| Dataset not found | Call `ragflow_list_datasets`, then copy an exact name or use its ID. |
+| Empty or irrelevant results | Check that documents are indexed. Try a known phrase and a lower `similarity_threshold`; inspect the selected dataset/document. |
+| Deepening has no effect | Check the provider key and response metadata. Ordinary retrieval can still succeed when deepening fails. |
 
-## Known issues
+For a startup check outside your client:
 
-### Rerank is broken upstream
+```sh
+uv run --locked --directory "/absolute/path/to/ragflow-claude-desktop-local-mcp" ragflow-claude-mcp
+```
 
-`use_rerank=true` errors out with `UnsupportedProtocol: Request URL is missing an 'http://' or 'https://' protocol`. This is a RAGFlow-side defect. Workaround: leave it off. I'm watching the RAGFlow repo for a fix.
+Errors go to stderr. A running process waiting for MCP input is expected; stop it with Ctrl+C. Review logs before sharing them: queries, document excerpts, and configuration details can be sensitive.
 
-## Contributing
+## Limits and security
 
-PRs only — `main` is protected. Commits must be SSH-signed.
+DSPy depends on DiskCache 5.6.3, which has an unresolved pickle-deserialization advisory, [GHSA-w8v5-vhqr-4h9v](https://github.com/advisories/GHSA-w8v5-vhqr-4h9v). DSPy enables disk caching by default. Keep its cache directory private to the account running this server; do not share or import caches from untrusted sources. No patched DiskCache release was listed during the v0.2.1 audit.
 
-1. Fork.
-2. `git checkout -b feature/your-thing`.
-3. Make the change, write a clear commit message.
-4. Push to your fork.
-5. Open a PR against `main`.
+The v0.2.1 local test run passed 28 tests with 49% coverage. Those checks use mocks; they do not certify your RAGFlow version, document relevance, or model-provider setup. See [CHANGELOG.md](CHANGELOG.md) for the maintenance changes and audit findings.
 
-PRs run TruffleHog automatically — don't include keys, tokens, or secrets. See [CONTRIBUTING.md](CONTRIBUTING.md) for the longer version.
+## Update or remove
+
+To update a release checkout, fetch tags, check out the desired tag, run `uv sync --locked --python 3.12`, then restart your client. Keep your private `config.json`. To roll back, check out the previous tag and sync again; dependency security fixes may be lost on rollback.
+
+To disconnect, remove the `ragflow` entry from Claude Desktop, run `codex mcp remove ragflow`, or run `agy mcp remove ragflow`. Restart the client. Removing the client entry does not delete your RAGFlow data.
+
+## Development
+
+```sh
+git switch -c feature/your-change
+uv sync --locked --extra dev
+uv run --locked pytest
+uv run --locked pytest --cov=src/ragflow_claude_mcp --cov-report=term-missing
+uv build
+```
+
+The release workflow tests and builds through Dagger. Contributions go through pull requests; use SSH-signed commits as described in [CONTRIBUTING.md](CONTRIBUTING.md) and [COMMIT_SIGNING.md](COMMIT_SIGNING.md).

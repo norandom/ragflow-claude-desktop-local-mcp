@@ -19,13 +19,13 @@ jobs:
     name: TruffleHog Secrets Scan
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
       - name: TruffleHog OSS (Push Events)
         if: github.event_name == 'push'
-        uses: trufflesecurity/trufflehog@main
+        uses: trufflesecurity/trufflehog@31ce31ee1abbcc7dc8eee5764c17121c3044c8b2 # v3.99.7
         with:
           path: ./
           base: ${{ github.event.before }}
@@ -34,7 +34,7 @@ jobs:
 
       - name: TruffleHog OSS (PR Events)
         if: github.event_name == 'pull_request'
-        uses: trufflesecurity/trufflehog@main
+        uses: trufflesecurity/trufflehog@31ce31ee1abbcc7dc8eee5764c17121c3044c8b2 # v3.99.7
         with:
           path: ./
           base: ${{ github.event.pull_request.base.sha }}
@@ -43,7 +43,7 @@ jobs:
 
       - name: TruffleHog Full Scan (Manual Trigger)
         if: github.event_name == 'workflow_dispatch'
-        uses: trufflesecurity/trufflehog@main
+        uses: trufflesecurity/trufflehog@31ce31ee1abbcc7dc8eee5764c17121c3044c8b2 # v3.99.7
         with:
           path: ./
           base: ''
@@ -51,7 +51,7 @@ jobs:
           extra_args: --debug --only-verified
 
       - name: TruffleHog Detailed Scan
-        uses: trufflesecurity/trufflehog@main
+        uses: trufflesecurity/trufflehog@31ce31ee1abbcc7dc8eee5764c17121c3044c8b2 # v3.99.7
         with:
           path: ./
           base: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event_name == 'push' && github.event.before || '' }}
@@ -72,7 +72,7 @@ jobs:
       - name: Comment PR on failure
         # GitHub-only: actions/github-script uses the GitHub API. Gitea skips.
         if: ${{ failure() && github.event_name == 'pull_request' && github.server_url == 'https://github.com' }}
-        uses: actions/github-script@v7
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |

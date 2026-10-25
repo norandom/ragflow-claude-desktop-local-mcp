@@ -457,6 +457,14 @@ class TestConfigurationLoading:
 
 class TestOpenRouterConfiguration:
     """Test suite for OpenRouter configuration."""
+
+    @pytest.fixture(autouse=True)
+    def isolated_dspy_settings(self):
+        """Do not reuse an LM configured by another test."""
+        import dspy
+
+        with dspy.context(lm=None):
+            yield
     
     def _setup_base_mocks(self, mock_getenv, mock_load_config):
         """Helper to setup common mocks for all tests."""
@@ -534,7 +542,6 @@ class TestOpenRouterConfiguration:
         assert "metadata" in result
         assert "deepening" in result["metadata"]
     
-    @pytest.mark.skip(reason="Intermittent failure due to test execution order - needs investigation")
     @patch('os.path.exists')
     @patch('builtins.open', new_callable=mock_open)
     @patch('json.load')

@@ -24,12 +24,12 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
       - name: Set up Dagger CLI
-        uses: dagger/dagger-for-github@e47aba410ef9bb9ed81a4d2a97df31061e5e842e # v8.0.0
+        uses: dagger/dagger-for-github@27b130bf0f79a7f6fbbbe0fbca6760dc9bb40a77 # v8.4.1
         with:
           version: "0.20.8"
           verb: version
@@ -55,7 +55,7 @@ jobs:
       - name: Create GitHub Release
         # GitHub Releases API. Skipped on Gitea.
         if: ${{ github.server_url == 'https://github.com' }}
-        uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v2.1.0
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           tag_name: ${{ steps.tag.outputs.tag }}
           name: ${{ steps.tag.outputs.tag }}
@@ -69,9 +69,8 @@ jobs:
         # Gitea-native release API. Runs only on a Gitea instance, where
         # github.server_url is the instance URL (not github.com).
         # GITEA_TOKEN is the auto-provisioned per-job token on Gitea Actions.
-        # NOTE: @v1 is a moving tag — pin to a commit SHA for supply-chain safety.
         if: ${{ github.server_url != 'https://github.com' }}
-        uses: akkuman/gitea-release-action@v1
+        uses: akkuman/gitea-release-action@5a83c90484ef4355121df5eb60558c8ce66e81ac # v1
         with:
           token: ${{ secrets.GITEA_TOKEN }}
           tag_name: ${{ steps.tag.outputs.tag }}

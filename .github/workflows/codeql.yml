@@ -34,10 +34,10 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
     - name: Initialize CodeQL
-      uses: github/codeql-action/init@v3
+      uses: github/codeql-action/init@793b778da9c9275a0f276522b27cb5fc14bba279 # v4
       with:
         languages: ${{ matrix.language }}
         build-mode: ${{ matrix.build-mode }}
@@ -64,7 +64,7 @@ jobs:
 
     - name: Set up Python
       if: matrix.language == 'python'
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
       with:
         python-version: '3.12'
 
@@ -76,7 +76,7 @@ jobs:
         if [ -f pyproject.toml ]; then pip install -e .; fi
 
     - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v3
+      uses: github/codeql-action/analyze@793b778da9c9275a0f276522b27cb5fc14bba279 # v4
       with:
         category: "/language:${{ matrix.language }}"
         # Upload detailed results including dataflow analysis

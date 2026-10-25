@@ -41,8 +41,8 @@ class Ci:
         """Run the project's pytest suite in a clean container. Returns pytest stdout."""
         return await (
             _base(source)
-            .with_exec(["uv", "sync", "--extra", "dev"])
-            .with_exec(["uv", "run", "pytest", "tests/", "-q", "--no-header"])
+            .with_exec(["uv", "sync", "--locked", "--extra", "dev"])
+            .with_exec(["uv", "run", "--locked", "pytest", "tests/", "-q", "--no-header"])
             .stdout()
         )
 
